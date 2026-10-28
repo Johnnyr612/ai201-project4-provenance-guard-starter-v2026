@@ -44,61 +44,85 @@ Two things worth knowing before you pick numbers:
 ---
 ## 1.
 
-<!-- Your criterion. It must name a number. -->
+For each of three evaluation trials, no more than 1 of 10 pieces I wrote
+myself will receive the high-confidence AI label.
 
 
 
 **Why this target:**
 
-
+I would rather let some AI-written text pass than wrongly accuse a real writer.
+One false accusation in ten is already a serious warning, so I want to keep
+that number low and check it against writing I actually wrote.
 
 ---
 
 ## 2.
 
-<!-- Your criterion. -->
+In each of three trials, the median `model_score` for five texts I identify as
+clearly AI-written will be at least 0.15 higher than the median `model_score`
+for five texts I wrote myself.
 
 
 
 **Why this target:**
 
-
+The model signal should show a measurable difference between these two groups,
+but I do not expect it to identify authorship perfectly. I chose a gap of 0.15
+as a meaningful separation to check, rather than expecting the scores never
+to overlap.
 
 ---
 
 ## 3.
 
-<!-- Your criterion. -->
+In each of three trials, my evaluation set will produce at least one
+high-confidence human label, one unsure label, and one high-confidence AI
+label.
 
 
 
 **Why this target:**
 
-
+All three labels need to be reachable or the service cannot express the
+difference between a low score, an ambiguous score, and a high score. I will
+use examples I expect to span those cases and check the returned labels.
 
 ---
 
 ## 4.
 
-<!-- Your criterion. -->
+For a valid appeal, the service must return a success response and add an
+`under_review` appeal entry to `/log` for the same `content_id`, while keeping
+the original decision entry. For an unknown `content_id`, it must return a
+4xx response and must not record an appeal.
 
 
 
 **Why this target:**
 
-
+An appeal should give the writer a clear confirmation and leave an auditable
+record without erasing the original decision. Rejecting an unknown ID avoids
+making it look as though a nonexistent decision was successfully appealed.
+I will check this manually by submitting once, appealing that returned ID,
+and then checking `/log`.
 
 ---
 
 ## 5.
 
-<!-- Your criterion. -->
+Requests with missing, empty, or `null` text, and requests with more than
+10,000 characters of text, must each receive a JSON 4xx response rather than
+a 500 error. After those requests, `GET /health` must still return 200.
 
 
 
 **Why this target:**
 
-
+These inputs are invalid or beyond the text size I chose to support, so the
+service should reject them clearly instead of crashing or trying to score
+them. Checking health afterwards makes sure handling bad input did not take
+down the service.
 
 ---
 

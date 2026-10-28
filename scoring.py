@@ -1,8 +1,8 @@
 """
 Turning two numbers into one, and one number into something a person can read.
-← YOU BUILD THIS IN MILESTONES 4 AND 5
+Milestone 4 scoring is implemented; label mapping remains for Milestone 5.
 
-Two functions live here, and both are stubs.
+`combine_signals` applies the Milestone 4 weighted average.
 
 `combine_signals` is where your false-positive decision from Milestone 1
 actually gets made. Everything above it — the labels, the appeal path — is
@@ -21,7 +21,7 @@ import config
 
 def combine_signals(model_score: float, style_score: float) -> float:
     """
-    Combine two 0–1 signals into one 0–1 score. ← TODO (Milestone 4)
+    Combine two 0–1 signals into one 0–1 score.
 
     Both inputs point the same way: higher means more likely AI. Your output
     should too.
@@ -49,14 +49,14 @@ def combine_signals(model_score: float, style_score: float) -> float:
       - Milestone 4 asks you to find a case where your two signals split and
         write it down. That case is what this rule exists to handle.
 
-    The weights in config.py are placeholders. Change them, or ignore them and
-    write a different rule.
+    The weighted average makes strong disagreement pull the result toward
+    0.5, where the later label mapping can call it unsure.
     """
-    # TODO: replace this
-    return (
+    combined = (
         config.WEIGHT_MODEL_SIGNAL * model_score
         + config.WEIGHT_STYLE_SIGNAL * style_score
     )
+    return round(min(max(combined, 0.0), 1.0), 4)
 
 
 def score_to_label(score: float) -> tuple[str, str]:
