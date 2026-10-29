@@ -18,12 +18,15 @@ doesn't, it's the service itself.
 Routes:
 
     POST /ping        the worked example. Already works. Don't edit it
-    POST /submit      signal one is implemented; extend it in Milestones 4 and 5
-    POST /appeal      ← YOU BUILD THIS (Milestone 5)
+    POST /submit      classify text using the configured signals
+    POST /appeal      record an appeal for an existing submission
     GET  /log         the audit log. Already works
     GET  /health      is the service up, and is the model loaded
+    GET  /content/<id> current status of one submission (stretch)
+    POST /verify-human reviewer-approved demo credential (stretch)
 """
 
+import hmac
 import uuid
 
 from flask import Flask, jsonify, request
@@ -182,28 +185,37 @@ def submit():
             "error": "invalid_creator_id",
             "message": "creator_id must be a non-empty string.",
         }), 400
+    creator_id = creator_id.strip()
 
     try:
         model_score = detector.model_signal(text)
         style_score = stylometry.style_signal(text)
+        repetition_score = stylometry.repetition_signal(text)
     except detector.DetectorUnavailable as exc:
         return jsonify({"error": "detector_unavailable", "message": str(exc)}), 503
     except ValueError as exc:
         return jsonify({"error": "invalid_text", "message": str(exc)}), 400
 
-    combined_score = scoring.combine_signals(model_score, style_score)
+    combined_score = scoring.combine_signals(
+        model_score,
+        style_score,
+        repetition_score,
+    )
     confidence = round(abs(combined_score - 0.5) * 2, 4)
     content_id = str(uuid.uuid4())
     guess, label = scoring.score_to_label(combined_score)
+    verified_human = audit.creator_is_verified(creator_id)
     audit.log_decision(
         content_id=content_id,
         creator_id=creator_id,
         guess=guess,
         model_score=model_score,
         style_score=style_score,
+        repetition_score=repetition_score,
         combined_score=combined_score,
         label=label,
         status="decided",
+        verified_human=verified_human,
     )
 
     return jsonify({
@@ -213,14 +225,17 @@ def submit():
         "label": label,
         "model_score": model_score,
         "style_score": style_score,
+        "repetition_score": repetition_score,
         "combined_score": combined_score,
+        "verified_human": verified_human,
+        "creator_credential": "reviewer-approved human" if verified_human else None,
     })
 
 
 @app.post("/appeal")
 def appeal():
     """
-    A writer says you got it wrong. ← TODO — Milestone 5
+    A writer says you got it wrong.
 
     Expects JSON:
         {"content_id": "...", "reasoning": "..."}
@@ -283,6 +298,85 @@ def appeal():
         "content_id": content_id,
         "status": "under_review",
         "message": "Your appeal has been recorded. Your submission is now under review.",
+    }), 200
+
+
+@app.get("/content/<content_id>")
+def get_content(content_id: str):
+    """Return the latest status and decision summary for a content ID."""
+    entries = audit.entries_for(content_id)
+    decision = next(
+        (entry for entry in entries if entry.get("status") == "decided"),
+        None,
+    )
+    if decision is None:
+        return jsonify({
+            "error": "not_found",
+            "message": "No submission was found for that content_id.",
+        }), 404
+
+    return jsonify({
+        "content_id": content_id,
+        "creator_id": decision["creator_id"],
+        "status": entries[-1].get("status", "decided"),
+        "guess": decision.get("guess"),
+        "label": decision.get("label"),
+        "combined_score": decision.get("combined_score"),
+        "verified_human": decision.get("verified_human", False),
+        "creator_credential": (
+            "reviewer-approved human"
+            if decision.get("verified_human", False)
+            else None
+        ),
+    }), 200
+
+
+@app.post("/verify-human")
+def verify_human():
+    """Grant the local demo credential when a reviewer-provided code matches."""
+    if not config.HUMAN_VERIFICATION_CODE:
+        return jsonify({
+            "error": "verification_unavailable",
+            "message": "A reviewer verification code is not configured.",
+        }), 503
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({
+            "error": "invalid_request",
+            "message": "Expected a JSON object.",
+        }), 400
+
+    creator_id = payload.get("creator_id")
+    verification_code = payload.get("verification_code")
+    if not isinstance(creator_id, str) or not creator_id.strip():
+        return jsonify({
+            "error": "invalid_creator_id",
+            "message": "creator_id must be a non-empty string.",
+        }), 400
+    creator_id = creator_id.strip()
+    if not isinstance(verification_code, str) or not verification_code:
+        return jsonify({
+            "error": "invalid_verification_code",
+            "message": "verification_code must be a non-empty string.",
+        }), 400
+    if not hmac.compare_digest(
+        verification_code.encode("utf-8"),
+        config.HUMAN_VERIFICATION_CODE.encode("utf-8"),
+    ):
+        return jsonify({
+            "error": "invalid_verification_code",
+            "message": "The reviewer verification code was not accepted.",
+        }), 403
+
+    if not audit.creator_is_verified(creator_id):
+        audit.log_human_verification(creator_id.strip())
+
+    return jsonify({
+        "ok": True,
+        "creator_id": creator_id.strip(),
+        "credential": "reviewer-approved human",
+        "status": "verified_human",
     }), 200
 
 

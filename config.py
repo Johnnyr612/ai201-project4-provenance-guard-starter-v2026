@@ -47,22 +47,22 @@ DETECTOR_MODEL = os.getenv("AI201_DETECTOR_MODEL", "gpt2")
 DETECTOR_MAX_TOKENS = 400
 
 
-# ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
-# How much each signal counts toward the combined score. Equal weights make
-# disagreement pull the result toward 0.5 instead of letting either signal
-# decide alone.
+# ─── Scoring ─────────────────────────────────────────────────────────────────
+# The two primary signals share most of the weight; repeated phrase patterns
+# get a smaller contribution because this heuristic is especially easy to game.
 
-WEIGHT_MODEL_SIGNAL = 0.5
-WEIGHT_STYLE_SIGNAL = 0.5
+WEIGHT_MODEL_SIGNAL = 0.4
+WEIGHT_STYLE_SIGNAL = 0.4
+WEIGHT_REPETITION_SIGNAL = 0.2
 
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────
 # Where one label becomes another. Scores run 0.0 (confidently human) to 1.0
 # (confidently AI).
 #
-#   score < HUMAN_THRESHOLD          -> high-confidence human
+#   score <= HUMAN_THRESHOLD         -> high-confidence human
 #   between the two                  -> unsure
-#   score > AI_THRESHOLD             -> high-confidence AI
+#   score >= AI_THRESHOLD            -> high-confidence AI
 #
 # ⚠️ This is where your false-positive decision from Milestone 1 actually gets
 # made. Widening the unsure band means fewer wrong accusations and more AI text
@@ -75,6 +75,12 @@ AI_THRESHOLD = 0.65
 # A weighted average stays between its two signal scores. `scoring.label_ranges()`
 # prints the label bands; whether actual text reaches a band depends on both
 # signal outputs.
+
+
+# ─── Reviewer-approved human credential (stretch) ────────────────────────────
+# Set this outside the repository. Anyone with the code can claim the demo
+# credential, so it represents reviewer approval rather than proof of identity.
+HUMAN_VERIFICATION_CODE = os.getenv("AI201_HUMAN_VERIFICATION_CODE")
 
 
 # ─── Rate limiting (UNIT 8) ──────────────────────────────────────────────────

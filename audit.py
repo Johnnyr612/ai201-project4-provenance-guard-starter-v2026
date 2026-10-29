@@ -155,3 +155,23 @@ def clear() -> int:
 def entries_for(content_id: str) -> list[dict]:
     """Every entry touching one content id, in order."""
     return [e for e in read_entries() if e.get("content_id") == content_id]
+
+
+def creator_is_verified(creator_id: str) -> bool:
+    """Whether a reviewer-approved verification event exists for this creator."""
+    return any(
+        entry.get("event") == "human_verification"
+        and entry.get("creator_id") == creator_id
+        and entry.get("status") == "verified_human"
+        for entry in read_entries()
+    )
+
+
+def log_human_verification(creator_id: str) -> dict:
+    """Record the reviewer-approved credential without retaining its code."""
+    return _append({
+        "timestamp": _now(),
+        "creator_id": creator_id,
+        "event": "human_verification",
+        "status": "verified_human",
+    })

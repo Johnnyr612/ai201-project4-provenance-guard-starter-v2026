@@ -139,6 +139,20 @@ def style_signal(text: str) -> float:
     )
 
 
+def repetition_signal(text: str) -> float:
+    """Score repeated three-word phrases from 0 (few) to 1 (many)."""
+    tokens = words(text)
+    if len(tokens) < 3:
+        return 0.0
+
+    trigrams = [
+        tuple(tokens[index:index + 3])
+        for index in range(len(tokens) - 2)
+    ]
+    repeated_fraction = (len(trigrams) - len(set(trigrams))) / len(trigrams)
+    return round(repeated_fraction, 4)
+
+
 if __name__ == "__main__":
     import sys
 
@@ -152,4 +166,5 @@ if __name__ == "__main__":
     print(f"type_token_ratio         {type_token_ratio(text)}")
     print(f"punctuation_density      {punctuation_density(text)}")
     print(f"style_signal             {style_signal(text)}   (higher = more likely AI)")
+    print(f"repetition_signal        {repetition_signal(text)}   (higher = more repeated phrases)")
     print("\nThese are surface-text heuristics, not proof of authorship.")

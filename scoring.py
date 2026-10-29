@@ -2,7 +2,7 @@
 Turning two numbers into one, and one number into something a person can read.
 Milestone 4 scoring is implemented; label mapping remains for Milestone 5.
 
-`combine_signals` applies the Milestone 4 weighted average.
+`combine_signals` applies the weighted average of all configured scores.
 
 `combine_signals` is where your false-positive decision from Milestone 1
 actually gets made. Everything above it — the labels, the appeal path — is
@@ -19,9 +19,13 @@ you claim, so that line should read `scoring.py::combine_signals`.
 import config
 
 
-def combine_signals(model_score: float, style_score: float) -> float:
+def combine_signals(
+    model_score: float,
+    style_score: float,
+    repetition_score: float = 0.0,
+) -> float:
     """
-    Combine two 0–1 signals into one 0–1 score.
+    Combine three 0–1 signals into one 0–1 score.
 
     Both inputs point the same way: higher means more likely AI. Your output
     should too.
@@ -29,6 +33,7 @@ def combine_signals(model_score: float, style_score: float) -> float:
     Args:
         model_score: from `detector.model_signal` — how predictable the text is.
         style_score: from `stylometry.style_signal` — the shape of the text.
+        repetition_score: from `stylometry.repetition_signal` — repeated phrases.
 
     Returns:
         A float from 0.0 (confidently human) to 1.0 (confidently AI).
@@ -55,6 +60,7 @@ def combine_signals(model_score: float, style_score: float) -> float:
     combined = (
         config.WEIGHT_MODEL_SIGNAL * model_score
         + config.WEIGHT_STYLE_SIGNAL * style_score
+        + config.WEIGHT_REPETITION_SIGNAL * repetition_score
     )
     return round(min(max(combined, 0.0), 1.0), 4)
 

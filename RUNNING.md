@@ -76,8 +76,9 @@ curl -X POST http://127.0.0.1:5000/submit \
   -d '{"text": "some writing", "creator_id": "me"}'
 ```
 
-It returns a `501` saying it isn't built yet. **That's the correct starting
-position.**
+In the untouched starter, this returns a `501` saying the route isn't built
+yet. **That's the correct starting position.** Once you implement Milestones
+3–5, it returns the scores and label instead.
 
 ---
 
@@ -88,8 +89,10 @@ position.**
 | `POST /ping` | **works** | The example. Don't edit it |
 | `GET /health` | **works** | Is the service up, is the model loaded |
 | `GET /log` | **works** | The audit log, as JSON |
-| `POST /submit` | **you build it** | Milestones 3, 4, 5 |
-| `POST /appeal` | **you build it** | Milestone 5 |
+| `POST /submit` | **implemented** | Scores text with three signals and returns a label |
+| `POST /appeal` | **implemented** | Records an appeal beside the original decision |
+| `GET /content/<id>` | **stretch** | Returns the current status of one submission |
+| `POST /verify-human` | **stretch** | Records reviewer approval using an environment-configured code |
 
 ---
 
@@ -101,7 +104,7 @@ position.**
 | `python app.py` | Runs the service |
 | `python detector.py` | Downloads the model and scores a sample — **run before class** |
 | `python detector.py "some text"` | Score one piece of text from the terminal |
-| `python stylometry.py "some text"` | Your style measures, on one piece of text |
+| `python stylometry.py "some text"` | Style and repeated-phrase signals, on one piece of text |
 | `python run_attacks.py --set <folder>` | The attack set — **unit 8** |
 | `python run_attacks.py --flood 15` | Push past your rate limit and print the status codes — **unit 8** |
 | `python run_eval.py --label before` | Your five criteria, three trials — **unit 8** |
@@ -120,6 +123,10 @@ position.**
 | 4 | Second signal, combine, score | `stylometry.py`, `scoring.py::combine_signals` |
 | 5 | Labels and the appeal path | `scoring.py::score_to_label`, `app.py::appeal` |
 | 6 | Write it up | `README.md` |
+
+Stretch work documented in the README adds a third repeated-phrase signal,
+`GET /content/<id>`, and reviewer-approved human credentials through
+`POST /verify-human`.
 
 ### Unit 8 — the test
 
@@ -143,9 +150,15 @@ signal.
 **before** you add any logic. Then pull `text` and `creator_id` out. Then call
 one signal. Then log it.
 
-**Milestone 4.** Add the second signal. Combine them. Log both scores.
+**Milestone 4.** Add the style signal. Combine and log the scores.
 
 **Milestone 5.** Turn the score into a label.
+
+The stretch adds a repeated-phrase signal to the weighted score, plus
+`GET /content/<id>` and `POST /verify-human`. The verification code is a
+reviewer-approved course/demo credential, not proof of identity. Set
+`AI201_HUMAN_VERIFICATION_CODE` before starting the service; never put the code
+in the repository.
 
 > Test each signal from a terminal on its own before wiring it in. If you skip
 > that you'll spend an hour not knowing whether the route or the signal is
