@@ -133,10 +133,9 @@ excerpt from the course brief; the conversational sample is my own prompt.
 | Lightly edited AI candidate: AI-generated | 0.6074 | 0.4366 | 0.5220 |
 
 This is a small calibration set, not evidence that the scores identify
-authorship reliably. For this milestone, `confidence` is
-`2 × abs(combined_score - 0.5)`: distance from the midpoint, not a calibrated
-probability. The `guess` and reader-facing label remain provisional until
-Milestone 5.
+authorship reliably. `confidence` is `2 × abs(combined_score - 0.5)`: distance
+from the midpoint, not a calibrated probability. The reader-facing labels use
+the configured score bands below.
 
 
 ---
@@ -150,16 +149,24 @@ Milestone 5.
 
 | Label | Score range | The exact text a reader sees |
 |---|---|---|
-| high-confidence human |  |  |
-| unsure |  |  |
-| high-confidence AI |  |  |
+| high-confidence human | 0.00–0.35, including 0.35 | We think this was probably written by a person. |
+| unsure | Greater than 0.35 and less than 0.65 | We can't tell confidently who wrote this. If you wrote it yourself, you can appeal this result. |
+| high-confidence AI | 0.65–1.00, including 0.65 | We think this was probably written by AI. |
 
 **Why I worded the "unsure" one this way:**
-<!-- It's the hardest of the three. It has to admit uncertainty without
-     sounding like an accusation, because the person reading it may well have
-     written every word themselves. -->
+I don't want an uncertain score to sound like an accusation. The message says
+plainly that the system cannot tell and tells a writer how to challenge a
+result.
 
+**Reachability checks:** I sent these three inputs through `/submit` and
+confirmed that each label can be returned. These are demonstrations of label
+coverage, not proof that the system can establish authorship.
 
+| Input | Combined score | Returned label |
+|---|---:|---|
+| My submitted sample asking the detector to verify labels and appeals | 0.2422 | `human` |
+| “The project is designed to improve communication across teams. It provides a structured approach for sharing updates, tracking decisions, and identifying potential issues. By using a consistent process, participants can collaborate more effectively and achieve their goals.” | 0.5240 | `unsure` |
+| “The system works.” repeated ten times | 0.9465 | `ai` |
 
 ---
 
@@ -176,58 +183,71 @@ Milestone 5.
      diagnostics. -->
 
 ```powershell
-curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d '{\"text\": \"What does milestone 1 want me to do? Ok so walk me through how you would complete milestone1 and explain your answer for each.\", \"creator_id\": \"milestone4-sample\"}'
+curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d '{\"text\": \"I wrote this short sample to verify that each score has a clear label and that a writer can appeal the result. The system should keep the original decision in its log.\", \"creator_id\": \"milestone5-check\"}'
 ```
 
 ```json
 {
-  "combined_score": 0.2858,
-  "confidence": 0.4284,
-  "content_id": "77059960-1716-4a1d-af95-a65fc1d3a283",
-  "guess": "pending",
-  "label": "Provisional score only; final label not implemented yet.",
-  "model_score": 0.3146,
-  "style_score": 0.2571
+  "combined_score": 0.2422,
+  "confidence": 0.5156,
+  "content_id": "4f9c84bc-3732-4db9-857c-ffa5a258aa41",
+  "guess": "human",
+  "label": "We think this was probably written by a person.",
+  "model_score": 0.2535,
+  "style_score": 0.2309
 }
 ```
 
 **An appeal**
 
 ```powershell
-curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d '{\"content_id\": \"...\", \"reasoning\": \"...\"}'
+curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d '{\"content_id\": \"4f9c84bc-3732-4db9-857c-ffa5a258aa41\", \"reasoning\": \"I wrote this text myself and would like a person to review the result.\"}'
 ```
 
 ```json
-
+{
+  "content_id": "4f9c84bc-3732-4db9-857c-ffa5a258aa41",
+  "message": "Your appeal has been recorded. Your submission is now under review.",
+  "ok": true,
+  "status": "under_review"
+}
 ```
 
 **What the log shows afterwards**
 
 ```powershell
-curl.exe "http://127.0.0.1:5000/log?limit=1"
+curl.exe "http://127.0.0.1:5000/log?limit=2"
 ```
 
 ```json
 {
-  "count": 1,
+  "count": 2,
   "entries": [
     {
-      "combined_score": 0.2858,
-      "content_id": "77059960-1716-4a1d-af95-a65fc1d3a283",
-      "creator_id": "milestone4-sample",
-      "guess": "pending",
-      "label": "Provisional score only; final label not implemented yet.",
-      "model_score": 0.3146,
+      "combined_score": 0.2422,
+      "content_id": "4f9c84bc-3732-4db9-857c-ffa5a258aa41",
+      "creator_id": "milestone5-check",
+      "guess": "human",
+      "label": "We think this was probably written by a person.",
+      "model_score": 0.2535,
       "status": "decided",
-      "style_score": 0.2571,
-      "timestamp": "2026-10-28T23:38:35+00:00"
+      "style_score": 0.2309,
+      "timestamp": "2026-10-28T23:44:32+00:00"
+    },
+    {
+      "content_id": "4f9c84bc-3732-4db9-857c-ffa5a258aa41",
+      "creator_id": "milestone5-check",
+      "event": "appeal",
+      "reasoning": "I wrote this text myself and would like a person to review the result.",
+      "status": "under_review",
+      "timestamp": "2026-10-28T23:44:34+00:00"
     }
   ]
 }
 ```
 
-The appeal example is still a placeholder; I will fill it in when I build
-`POST /appeal` in Milestone 5.
+The decision remains in the append-only log, followed by a separate appeal
+event with status `under_review`.
 
 ---
 
@@ -252,6 +272,17 @@ The appeal example is still a placeholder; I will fill it in when I build
 - *What I changed:* I used equal weights so disagreement moves toward the
   midpoint, kept labels provisional for Milestone 5, and checked that `/submit`
   and `/log` returned and recorded both signal scores.
+
+**Moment 3**
+
+- *What I asked for:* Help writing the three reader-facing labels and an appeal
+  route that records the appeal beside the original decision.
+- *What came back:* Threshold-based label mapping, request validation, and an
+  appeal flow that returns a confirmation and rejects unknown or duplicate
+  appeals.
+- *What I changed:* I chose wording that states uncertainty without accusing
+  the writer, tested that all three label bands are reachable, and checked
+  that the appeal leaves the original audit entry intact.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
