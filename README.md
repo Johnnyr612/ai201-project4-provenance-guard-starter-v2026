@@ -418,7 +418,6 @@ The matching entries from the `/log?limit=10` output were:
 - *What I did:* I declared the stretch items in this README before building
   them, implemented the features, chose a reviewer-configured code instead of
   a hard-coded credential, documented that it represents local demo approval
-  only, and verified the behavior with focused tests and HTTP requests.
 
 ### Stretch items — declared before implementation
 
@@ -531,6 +530,13 @@ the detector. The daily cap also limits sustained probing.
 toward that creator's limits. Requests without one fall back to the caller's
 IP address.
 
+**What per-creator limiting catches and costs:** A script that keeps the same
+creator ID while rotating IP addresses still reaches that creator's quota;
+IP-only limiting would treat each address separately. This depends on callers
+reusing an ID, though: because this demo does not authenticate creator IDs, a
+caller can evade the per-creator limit by changing IDs. Shared IDs can also
+make multiple writers share one quota.
+
 **The run of status codes when I pushed past it:**
 
 <!-- python run_attacks.py --flood 15 -->
@@ -568,107 +574,164 @@ ground-truth labels. For evasion and prompt-injection attempts targeting a
 human result, I counted only a `human` label as a successful bypass; `unsure`
 did not meet that target.
 
-**Ten audit log entries from the run**
+**Ten audit log entries**
 
-<!-- Choose entries that show the interesting failures, not the ten easiest. -->
+The two scored entries are from the attack run. The eight rejected entries
+were recorded by exercising the request-validation route after I fixed the
+rejection schema. Rejections include all nine required fields; fields that do
+not apply before scoring are `null`.
+This was a follow-up instrumentation check after the before/after detector
+runs; it did not alter or re-run the scoring experiment. Existing older
+rejection lines in the append-only file were not rewritten; new rejection
+events use the complete schema.
 
 ```json
 [
   {
-    "combined_score": 0.7988,
+    "timestamp": "2026-11-05T01:08:12+00:00",
     "content_id": "737b8353-1fac-46ec-bb90-61d7e49e79de",
     "creator_id": "attacker_MF06",
     "guess": "ai",
-    "label": "We think this was probably written by AI.",
     "model_score": 0.9969,
-    "repetition_score": 0.0,
-    "status": "decided",
     "style_score": 1.0,
-    "timestamp": "2026-11-05T01:08:12+00:00",
+    "combined_score": 0.7988,
+    "label": "We think this was probably written by AI.",
+    "status": "decided",
+    "repetition_score": 0.0,
     "verified_human": false
   },
   {
-    "combined_score": 0.7626,
+    "timestamp": "2026-11-05T01:08:12+00:00",
     "content_id": "ee57e7d7-9b14-48bd-a91d-231fedf2c297",
     "creator_id": "attacker_MF07",
     "guess": "ai",
-    "label": "We think this was probably written by AI.",
     "model_score": 0.9064,
-    "repetition_score": 0.0,
-    "status": "decided",
     "style_score": 1.0,
-    "timestamp": "2026-11-05T01:08:12+00:00",
+    "combined_score": 0.7626,
+    "label": "We think this was probably written by AI.",
+    "status": "decided",
+    "repetition_score": 0.0,
     "verified_human": false
   },
   {
-    "creator_id": "attacker_MF08",
-    "error": "text_too_long",
+    "timestamp": "2026-11-05T17:42:22+00:00",
+    "content_id": null,
+    "creator_id": "schema_check_1",
+    "guess": null,
+    "model_score": null,
+    "style_score": null,
+    "combined_score": null,
+    "label": null,
+    "status": "rejected",
+    "event": "rejected",
+    "reason": "invalid_text",
+    "error": "invalid_text",
+    "status_code": 400
+  },
+  {
+    "timestamp": "2026-11-05T17:42:22+00:00",
+    "content_id": null,
+    "creator_id": "schema_check_2",
+    "guess": null,
+    "model_score": null,
+    "style_score": null,
+    "combined_score": null,
+    "label": null,
+    "status": "rejected",
+    "event": "rejected",
+    "reason": "invalid_text",
+    "error": "invalid_text",
+    "status_code": 400
+  },
+  {
+    "timestamp": "2026-11-05T17:42:22+00:00",
+    "content_id": null,
+    "creator_id": "schema_check_3",
+    "guess": null,
+    "model_score": null,
+    "style_score": null,
+    "combined_score": null,
+    "label": null,
+    "status": "rejected",
+    "event": "rejected",
+    "reason": "invalid_text",
+    "error": "invalid_text",
+    "status_code": 400
+  },
+  {
+    "timestamp": "2026-11-05T17:42:22+00:00",
+    "content_id": null,
+    "creator_id": "schema_check_4",
+    "guess": null,
+    "model_score": null,
+    "style_score": null,
+    "combined_score": null,
+    "label": null,
+    "status": "rejected",
     "event": "rejected",
     "reason": "text_too_long",
-    "status": "rejected",
-    "status_code": 413,
-    "timestamp": "2026-11-05T01:08:12+00:00"
+    "error": "text_too_long",
+    "status_code": 413
   },
   {
-    "creator_id": "attacker_RQ01",
-    "error": "invalid_text",
-    "event": "rejected",
-    "reason": "invalid_text",
+    "timestamp": "2026-11-05T17:42:22+00:00",
+    "content_id": null,
+    "creator_id": "unknown",
+    "guess": null,
+    "model_score": null,
+    "style_score": null,
+    "combined_score": null,
+    "label": null,
     "status": "rejected",
-    "status_code": 400,
-    "timestamp": "2026-11-05T01:08:12+00:00"
+    "event": "rejected",
+    "reason": "invalid_creator_id",
+    "error": "invalid_creator_id",
+    "status_code": 400
   },
   {
-    "creator_id": "attacker_RQ03",
-    "error": "invalid_text",
-    "event": "rejected",
-    "reason": "invalid_text",
+    "timestamp": "2026-11-05T17:42:22+00:00",
+    "content_id": null,
+    "creator_id": "unknown",
+    "guess": null,
+    "model_score": null,
+    "style_score": null,
+    "combined_score": null,
+    "label": null,
     "status": "rejected",
-    "status_code": 400,
-    "timestamp": "2026-11-05T01:08:12+00:00"
+    "event": "rejected",
+    "reason": "invalid_request",
+    "error": "invalid_request",
+    "status_code": 400
   },
   {
-    "creator_id": "attacker_RQ04",
-    "error": "invalid_text",
-    "event": "rejected",
-    "reason": "invalid_text",
+    "timestamp": "2026-11-05T17:42:22+00:00",
+    "content_id": null,
+    "creator_id": "unknown",
+    "guess": null,
+    "model_score": null,
+    "style_score": null,
+    "combined_score": null,
+    "label": null,
     "status": "rejected",
-    "status_code": 400,
-    "timestamp": "2026-11-05T01:08:12+00:00"
+    "event": "rejected",
+    "reason": "invalid_request",
+    "error": "invalid_request",
+    "status_code": 400
   },
   {
-    "creator_id": "attacker_RQ05",
-    "error": "invalid_text",
-    "event": "rejected",
-    "reason": "invalid_text",
+    "timestamp": "2026-11-05T17:42:22+00:00",
+    "content_id": null,
+    "creator_id": "unknown",
+    "guess": null,
+    "model_score": null,
+    "style_score": null,
+    "combined_score": null,
+    "label": null,
     "status": "rejected",
-    "status_code": 400,
-    "timestamp": "2026-11-05T01:08:12+00:00"
-  },
-  {
-    "creator_id": "attacker_RQ12",
-    "error": "invalid_text",
     "event": "rejected",
-    "reason": "invalid_text",
-    "status": "rejected",
-    "status_code": 400,
-    "timestamp": "2026-11-05T01:08:12+00:00"
-  },
-  {
-    "creator_id": "attacker_flood",
-    "event": "rejected",
-    "limit": "10 per 1 minute",
-    "reason": "rate_limited",
-    "status": "rejected",
-    "timestamp": "2026-11-05T01:08:12+00:00"
-  },
-  {
-    "creator_id": "attacker_flood",
-    "event": "rejected",
-    "limit": "10 per 1 minute",
-    "reason": "rate_limited",
-    "status": "rejected",
-    "timestamp": "2026-11-05T01:08:12+00:00"
+    "reason": "invalid_request",
+    "error": "invalid_request",
+    "status_code": 400
   }
 ]
 ```
@@ -895,6 +958,36 @@ The complete after evaluation is in
 [run_2026-11-05_0917_after.md](./results/run_2026-11-05_0917_after.md).
 The result shows the trade clearly: the label change reduced confident
 human-label bypasses, but often replaced a decision with uncertainty.
+After those experiment runs, I made a separate audit-only correction:
+`audit.log_rejection` now writes the same nine required fields as decisions,
+with `null` where scoring did not occur. I verified new rejection events
+against the log; this does not change the attack or evaluation results above.
+
+### Before-and-after comparison
+
+The before evidence is the original-threshold run; the after evidence is the
+run after the single change from `HUMAN_THRESHOLD = 0.35` to `0.18`.
+
+| Attack family | Before BROKE / total | After BROKE / total | Change |
+|---|---:|---:|---|
+| Evasion | 5/10 | 0/10 | Five human labels became unsure. |
+| False positive | 0/8 | 0/8 | No AI labels in either run; after, all eight were unsure. |
+| Prompt injection | 2/6 | 1/6 | PI01 became unsure; PI02 remains human. |
+| Malformed | 0/20 | 0/20 | All invalid requests were rejected or handled without a server error. |
+| Same-creator flood | 0/12 | 0/12 | The final two requests were rate limited in both runs. |
+| **Total** | **7/56** | **1/56** | **Six fewer attacks met their bypass target.** |
+
+For the five criteria, the before and after verdicts were all **MET** in each
+of three trials. Criterion 1 stayed at 0/10 high-confidence AI labels per
+trial, but changed from five `human` and five `unsure` results to ten
+`unsure`. Criterion 2's model-score gap stayed +0.442; criterion 3 produced
+all three labels in every trial; valid/unknown appeals passed 2/2 each time;
+and all four invalid requests remained 4xx with `/health` returning 200.
+
+The full per-attack results are in the [before report](./results/attack_run_2026-11-04_1708_before.md)
+and [after report](./results/attack_run_2026-11-05_0916_after.md). The
+three-trial records are in the [before evaluation](./results/run_2026-11-04_2252_before.md)
+and [after evaluation](./results/run_2026-11-05_0917_after.md).
 
 ---
 
@@ -908,6 +1001,10 @@ scores. I stopped at this one surgical change rather than tuning the signals
 against the same small attack set and risking overfitting. A next test should
 add diverse, human-reviewed samples and examine minimum text length and signal
 behavior on short inputs.
+
+The audit-schema omission on rejected events is fixed for new entries.
+Previously written rejection entries remain in the append-only log with their
+original, shorter shape; I did not rewrite historical records.
 
 No acceptance criterion was missed in the three after trials, but meeting
 criterion 1 by returning `unsure` for every personal sample is not a useful

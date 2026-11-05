@@ -97,18 +97,27 @@ def log_rejection(creator_id: str, reason: str, **extra) -> dict:
     Record a request that never became a decision — a rate-limit rejection or
     an input your route refused.
 
+    The nine required decision fields are still present. Values that cannot
+    exist for a rejected request, such as a score or content ID, are `None`.
+
     ⚠️ Unit 8 asks for this explicitly, and the reason is worth holding onto:
     **an attack that shows up only as an absence is one you'll never find.** A
     thousand requests that got a 429 and left no trace look exactly like a
     quiet afternoon.
     """
     return _append({
-        "timestamp": _now(),
-        "creator_id": creator_id,
-        "event": "rejected",
-        "status": "rejected",
-        "reason": reason,
         **extra,
+        "timestamp": _now(),
+        "content_id": None,
+        "creator_id": creator_id,
+        "guess": None,
+        "model_score": None,
+        "style_score": None,
+        "combined_score": None,
+        "label": None,
+        "status": "rejected",
+        "event": "rejected",
+        "reason": reason,
     })
 
 
