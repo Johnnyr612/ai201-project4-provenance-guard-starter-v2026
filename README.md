@@ -550,20 +550,137 @@ invalid `text` field, in the audit log; inspect them with `GET /log`.
 <!-- Every attack with its outcome and a held-or-broke mark.
      `run_attacks.py --label before` produces the table. -->
 
+I ran all 56 inputs using `python run_attacks.py --set attack_set --label
+before`. The complete per-attack results, including each status, label, and
+HELD/BROKE verdict, are in the [before attack report](./results/attack_run_2026-11-04_1708_before.md).
+By my stated verdict criteria, 7 attacks broke through and 49 were held:
 
+| Family | BROKE | HELD | Notes |
+|---|---:|---:|---|
+| Evasion | 5 | 5 | Five AI-targeted submissions received a human label. |
+| False positive | 0 | 8 | None received an AI label; seven were unsure and one human. |
+| Prompt injection | 2 | 4 | PI01 and PI02 received the requested human label. |
+| Malformed | 0 | 20 | Invalid requests were rejected; unusual text inputs were handled without server errors. |
+| Same-creator flood | 0 | 12 | Ten requests fit within the quota; the last two received 429. |
+
+These are manual judgments against each attack's stated target, not automated
+ground-truth labels. For evasion and prompt-injection attempts targeting a
+human result, I counted only a `human` label as a successful bypass; `unsure`
+did not meet that target.
 
 **Ten audit log entries from the run**
 
 <!-- Choose entries that show the interesting failures, not the ten easiest. -->
 
 ```json
-
+[
+  {
+    "combined_score": 0.7988,
+    "content_id": "737b8353-1fac-46ec-bb90-61d7e49e79de",
+    "creator_id": "attacker_MF06",
+    "guess": "ai",
+    "label": "We think this was probably written by AI.",
+    "model_score": 0.9969,
+    "repetition_score": 0.0,
+    "status": "decided",
+    "style_score": 1.0,
+    "timestamp": "2026-11-05T01:08:12+00:00",
+    "verified_human": false
+  },
+  {
+    "combined_score": 0.7626,
+    "content_id": "ee57e7d7-9b14-48bd-a91d-231fedf2c297",
+    "creator_id": "attacker_MF07",
+    "guess": "ai",
+    "label": "We think this was probably written by AI.",
+    "model_score": 0.9064,
+    "repetition_score": 0.0,
+    "status": "decided",
+    "style_score": 1.0,
+    "timestamp": "2026-11-05T01:08:12+00:00",
+    "verified_human": false
+  },
+  {
+    "creator_id": "attacker_MF08",
+    "error": "text_too_long",
+    "event": "rejected",
+    "reason": "text_too_long",
+    "status": "rejected",
+    "status_code": 413,
+    "timestamp": "2026-11-05T01:08:12+00:00"
+  },
+  {
+    "creator_id": "attacker_RQ01",
+    "error": "invalid_text",
+    "event": "rejected",
+    "reason": "invalid_text",
+    "status": "rejected",
+    "status_code": 400,
+    "timestamp": "2026-11-05T01:08:12+00:00"
+  },
+  {
+    "creator_id": "attacker_RQ03",
+    "error": "invalid_text",
+    "event": "rejected",
+    "reason": "invalid_text",
+    "status": "rejected",
+    "status_code": 400,
+    "timestamp": "2026-11-05T01:08:12+00:00"
+  },
+  {
+    "creator_id": "attacker_RQ04",
+    "error": "invalid_text",
+    "event": "rejected",
+    "reason": "invalid_text",
+    "status": "rejected",
+    "status_code": 400,
+    "timestamp": "2026-11-05T01:08:12+00:00"
+  },
+  {
+    "creator_id": "attacker_RQ05",
+    "error": "invalid_text",
+    "event": "rejected",
+    "reason": "invalid_text",
+    "status": "rejected",
+    "status_code": 400,
+    "timestamp": "2026-11-05T01:08:12+00:00"
+  },
+  {
+    "creator_id": "attacker_RQ12",
+    "error": "invalid_text",
+    "event": "rejected",
+    "reason": "invalid_text",
+    "status": "rejected",
+    "status_code": 400,
+    "timestamp": "2026-11-05T01:08:12+00:00"
+  },
+  {
+    "creator_id": "attacker_flood",
+    "event": "rejected",
+    "limit": "10 per 1 minute",
+    "reason": "rate_limited",
+    "status": "rejected",
+    "timestamp": "2026-11-05T01:08:12+00:00"
+  },
+  {
+    "creator_id": "attacker_flood",
+    "event": "rejected",
+    "limit": "10 per 1 minute",
+    "reason": "rate_limited",
+    "status": "rejected",
+    "timestamp": "2026-11-05T01:08:12+00:00"
+  }
+]
 ```
 
 **The single worst outcome** — the one I'd least want to explain to a writer
 whose work got caught by it:
 
-
+None of the eight explicitly human false-positive samples was labeled AI, so
+this run contains no confirmed wrongful AI accusation. The closest concerning
+result was FP02, formal human writing labeled `unsure`. That is not an
+accusation, but it leaves the writer without a clear result; I would explain
+that `unsure` is inconclusive and not evidence that the writer used AI.
 
 ---
 
