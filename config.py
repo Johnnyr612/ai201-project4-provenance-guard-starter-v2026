@@ -69,7 +69,7 @@ WEIGHT_REPETITION_SIGNAL = 0.2
 # getting through. There is no setting that avoids the trade — only settings
 # that decide who pays for it.
 
-HUMAN_THRESHOLD = 0.35
+HUMAN_THRESHOLD = 0.18
 AI_THRESHOLD = 0.65
 
 # A weighted average stays between its two signal scores. `scoring.label_ranges()`

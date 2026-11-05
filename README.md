@@ -180,8 +180,8 @@ score bands below.
 
 | Label | Score range | The exact text a reader sees |
 |---|---|---|
-| high-confidence human | 0.00–0.35, including 0.35 | We think this was probably written by a person. |
-| unsure | Greater than 0.35 and less than 0.65 | We can't tell confidently who wrote this. If you wrote it yourself, you can appeal this result. |
+| high-confidence human | 0.00–0.18, including 0.18 | We think this was probably written by a person. |
+| unsure | Greater than 0.18 and less than 0.65 | We can't tell confidently who wrote this. If you wrote it yourself, you can appeal this result. |
 | high-confidence AI | 0.65–1.00, including 0.65 | We think this was probably written by AI. |
 
 **Why I worded the "unsure" one this way:**
@@ -815,40 +815,116 @@ success, moved the content to `under_review`, and retained the original
 decision in the log; unknown IDs returned 404 without a recorded appeal.
 Empty, missing, null, and overlong text returned 400/413, and `/health`
 remained 200 after each set of invalid requests.
+
+The before attack run had seven broken attacks. Five shared an evasion pattern:
+
+- **EV01:** At the **signal-one** stage, the typo-heavy text received a low
+  `model_score` of 0.1635. The **combining rule** averaged it with a style
+  score of 0.4165 to 0.232, and the **label mapping** called that human under
+  the then-current 0.35 cutoff.
+- **EV02:** **Signal two** gave the irregular sentence pattern a style score
+  of 0.0377. The **combining rule** brought the final score to 0.2528, which
+  the **label mapping** called human.
+- **EV05:** Heavy editing lowered both **signal one** (0.3212) and **signal
+  two** (0.1449). Their **combining rule** produced 0.1864, below the old
+  human cutoff, so **label mapping** returned human.
+- **EV06:** **Signal two** scored the extreme short/long sentence pattern at
+  0.121 (repetition was 0.0556). The **combining rule** produced 0.2886 and
+  **label mapping** returned human.
+- **EV08:** The short input got a low **signal-one** score of 0.2452; the
+  style score was 0.3243. With no minimum-length guard in the **route**, the
+  **combining rule** returned 0.2278 and **label mapping** called it human.
+
+The other two failures were prompt-injection-themed inputs, which the service
+correctly treated as text rather than instructions to itself:
+
+- **PI01:** **Signal two** scored the text at 0.1402; combined with model
+  score 0.4625, the **combining rule** returned 0.2411. The **label mapping**
+  called it human under the old 0.35 cutoff.
+- **PI02:** **Signal one** (0.2044) and **signal two** (0.1093) were both low.
+  The **combining rule** returned 0.1255, so the **label mapping** called it
+  human. This is the failure that remained after the threshold change.
+
+These are connected failure mechanisms, not seven unrelated bugs: signal
+distortions lowered scores for edited or unusual text, the weighted average
+let those low values dominate, and a 0.35 human cutoff turned the result into
+a confident human label.
 ---
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** I lowered `HUMAN_THRESHOLD` in `config.py` from 0.35 to
+0.18. I did not change any acceptance criterion. This changes only the
+**label-mapping** stage; it does not improve the signals or establish
+authorship.
 
-**Which diagnosis pointed at it:**
+**Which diagnosis pointed at it:** Six of the seven baseline failures had
+combined scores between 0.1864 and 0.2886, so the previous 0.35 human cutoff
+was classifying them as human. PI02 scored 0.1255, below even the new cutoff;
+the change was not expected to fix that case.
 
 ### Attack Run — After
 
-<!-- Same format. `run_attacks.py --label after` -->
+I manually judged all 56 results in the
+[after attack report](./results/attack_run_2026-11-05_0916_after.md). A
+successful evasion or prompt-injection attempt needed a `human` label to count
+as broken; `unsure` did not meet its target. Malformed-input attacks were
+judged on rejection/availability, and flood attacks on quota enforcement.
 
-
+| Family | BROKE | HELD | Notes |
+|---|---:|---:|---|
+| Evasion | 0 | 10 | EV01, EV02, EV05, EV06, and EV08 now returned `unsure`; the others were held. |
+| False positive | 0 | 8 | No sample received an AI label. |
+| Prompt injection | 1 | 5 | PI02 still received a `human` label; PI01 now returned `unsure`. |
+| Malformed | 0 | 20 | Invalid requests were rejected; unusual text did not crash the service. |
+| Same-creator flood | 0 | 12 | Ten were accepted; the last two received 429. |
+| **Total** | **1** | **55** | **One remaining broken attack: PI02.** |
 
 **Did it help, and how do I know:**
 
-<!-- Widening the unsure band usually fixes one problem and creates another.
-     Reporting that trade honestly is worth full credit. -->
+Yes, for the attack-set target used here: the manual count fell from 7 broken
+attacks in the before run to 1 in the after run. The five evasion cases and
+PI01 moved from `human` to `unsure`; PI02 remained `human`. The three-trial
+evaluation still met all five original targets. In particular, criterion 1
+had 0/10 AI labels in every trial, but all ten own-writing samples were
+`unsure`, not confidently human. All five AI-written texts in criterion 2
+were also `unsure`, even though their model median remained 0.9058 versus
+0.4638 for my writing (a +0.442 gap).
 
-
+The complete after evaluation is in
+[run_2026-11-05_0917_after.md](./results/run_2026-11-05_0917_after.md).
+The result shows the trade clearly: the label change reduced confident
+human-label bypasses, but often replaced a decision with uncertainty.
 
 ---
 
 ## What's Still Broken
 
-<!-- For each attack still getting through and each criterion still missed:
-     what you'd do, and why you stopped. -->
+**PI02** is still broken. Its model and style scores (0.2044 and 0.1093)
+combine to 0.1255, below the new 0.18 human cutoff. The failure spans
+**signals one and two**, the **combining rule**, and ultimately the **label
+mapping**; lowering the threshold alone cannot fix those low component
+scores. I stopped at this one surgical change rather than tuning the signals
+against the same small attack set and risking overfitting. A next test should
+add diverse, human-reviewed samples and examine minimum text length and signal
+behavior on short inputs.
 
-
+No acceptance criterion was missed in the three after trials, but meeting
+criterion 1 by returning `unsure` for every personal sample is not a useful
+human-writing experience. The evaluation set is small and the criteria do
+not require enough confidently human or AI labels to prove useful coverage.
+Criterion 1 is the target I would tighten in a future evaluation: keep its
+original false-positive ceiling, and add a separate minimum for how many of
+my own samples must receive the human label. I am not rewriting the original
+criterion because it was measurable and was met.
 
 **The trade I'd make if this ran for real:**
 
-<!-- Two sentences. Fewer wrong accusations means more AI text getting through.
-     Say which way you'd go and WHO PAYS FOR IT. -->
+I would prefer an `unsure` result over a confident AI accusation, so writers
+would not be penalized based on these weak signals. Writers pay for that
+caution through inconclusive results and appeals, while readers and reviewers
+pay because some AI-written text, including PI02, can still receive a human
+label.
 
 ## Milestone 6 submission
 
