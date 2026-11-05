@@ -520,25 +520,28 @@ I verified the routes with real HTTP requests.
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 10 per minute, 200 per day
 
 **Why those numbers and not others:**
-<!-- Think about two people: a real writer submitting their own work a few
-     times an hour, and a script sending a thousand variations to map your
-     thresholds. Your numbers have to be liveable for the first and hostile to
-     the second. -->
+These limits leave room for a writer to submit their own work without
+friction, while limiting how quickly a script can send variations to probe
+the detector. The daily cap also limits sustained probing.
 
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+**What a caller counts as:** Requests with a non-empty `creator_id` count
+toward that creator's limits. Requests without one fall back to the caller's
+IP address.
 
 **The run of status codes when I pushed past it:**
 
 <!-- python run_attacks.py --flood 15 -->
 
 ```
-
+200 200 200 200 200 200 200 200 200 200 429 429 429 429 429
 ```
+
+Five of 15 submissions were rate limited.
+The `/submit` route also records rejected requests, such as a missing or
+invalid `text` field, in the audit log; inspect them with `GET /log`.
 
 ---
 

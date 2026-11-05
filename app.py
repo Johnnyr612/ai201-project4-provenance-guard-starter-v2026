@@ -154,7 +154,7 @@ def health():
 # ── MILESTONES 3–5: extend this route as you build ────────────────────────────
 
 @app.post("/submit")
-# @limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
+@limiter.limit(f"{config.RATE_LIMIT_PER_MINUTE}/minute;{config.RATE_LIMIT_PER_DAY}/day")
 def submit():
     """Score one submission with both signals and record its reader-facing result."""
     import detector
@@ -162,29 +162,34 @@ def submit():
     import stylometry
 
     payload = request.get_json(silent=True)
+
+    def reject(reason: str, message: str, status_code: int):
+        creator_id = payload.get("creator_id") if isinstance(payload, dict) else None
+        if not isinstance(creator_id, str) or not creator_id.strip():
+            creator_id = "unknown"
+        audit.log_rejection(
+            creator_id=creator_id.strip(),
+            reason=reason,
+            error=reason,
+            status_code=status_code,
+        )
+        return jsonify({"error": reason, "message": message}), status_code
+
     if not isinstance(payload, dict):
-        return jsonify({
-            "error": "invalid_request",
-            "message": "Expected a JSON object.",
-        }), 400
+        return reject("invalid_request", "Expected a JSON object.", 400)
 
     text = payload.get("text")
     creator_id = payload.get("creator_id")
     if not isinstance(text, str) or not text.strip():
-        return jsonify({
-            "error": "invalid_text",
-            "message": "text must be a non-empty string.",
-        }), 400
+        return reject("invalid_text", "text must be a non-empty string.", 400)
     if len(text) > 10_000:
-        return jsonify({
-            "error": "text_too_long",
-            "message": "text must be 10,000 characters or fewer.",
-        }), 413
+        return reject("text_too_long", "text must be 10,000 characters or fewer.", 413)
     if not isinstance(creator_id, str) or not creator_id.strip():
-        return jsonify({
-            "error": "invalid_creator_id",
-            "message": "creator_id must be a non-empty string.",
-        }), 400
+        return reject(
+            "invalid_creator_id",
+            "creator_id must be a non-empty string.",
+            400,
+        )
     creator_id = creator_id.strip()
 
     try:
@@ -192,9 +197,9 @@ def submit():
         style_score = stylometry.style_signal(text)
         repetition_score = stylometry.repetition_signal(text)
     except detector.DetectorUnavailable as exc:
-        return jsonify({"error": "detector_unavailable", "message": str(exc)}), 503
+        return reject("detector_unavailable", str(exc), 503)
     except ValueError as exc:
-        return jsonify({"error": "invalid_text", "message": str(exc)}), 400
+        return reject("invalid_text", str(exc), 400)
 
     combined_score = scoring.combine_signals(
         model_score,
