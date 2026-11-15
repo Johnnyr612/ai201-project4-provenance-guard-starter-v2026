@@ -1008,6 +1008,32 @@ hosted service. I’ll keep implementation of the operational layer within
 about 90 minutes so there is time to write criteria, run and re-run the tests,
 and document the results.
 
+### Unit 9 runtime instrumentation
+
+The service now writes one structured event for each completed HTTP request
+to `logs/runtime.jsonl`. Each JSONL record includes a UTC timestamp, event,
+method, route template, input summary, output summary, and elapsed time in
+milliseconds. Input summaries retain field names and character counts rather
+than submitted writing or creator ID values. Output summaries retain the
+status code and selected result fields rather than copying the full response.
+
+The instrumentation wraps the existing Flask request lifecycle; the scoring
+routes and their responses are unchanged. Run the existing smoke check with
+`python test.py` and the focused instrumentation tests with
+`python -m unittest -v test_observability.py`. The reproducible local run
+command and log inspection steps are in [RUNNING.md](./RUNNING.md).
+
+**Initial live HTTP smoke check:** With `python app.py` running, I sent a
+`POST /ping` and a `GET /health`. Both returned 200, and the service appended
+these two events to `logs/runtime.jsonl`. This verifies the run path and log
+writer; it is not the later three-trial criteria run, which still needs at
+least ten committed entries.
+
+```json
+{"timestamp":"2026-11-15T05:43:12+00:00","event":"http_request","method":"POST","route":"/ping","input":{"query_fields":[],"json_fields":["message"],"message_characters":14,"creator_id_present":false},"output":{"status_code":200,"content_type":"application/json","json_fields":["ok","service","you_sent"],"ok":true},"duration_ms":0.326}
+{"timestamp":"2026-11-15T05:43:13+00:00","event":"http_request","method":"GET","route":"/health","input":{"query_fields":[]},"output":{"status_code":200,"content_type":"application/json","json_fields":["detector_loaded","detector_model","log_entries","ok","rate_limiting"],"ok":true},"duration_ms":18.828}
+```
+
 ---
 
 ## What's Still Broken

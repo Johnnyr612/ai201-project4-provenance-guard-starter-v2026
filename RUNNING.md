@@ -68,6 +68,27 @@ sent it data, it sent something back.
 `/ping` still answers: if it does, the problem is in your handler; if it
 doesn't, it's the service itself, and that's a help-channel question.
 
+## Unit 9 runtime log
+
+The local run command is still `python app.py`. Each completed HTTP request
+appends one JSON object to `logs/runtime.jsonl`, including requests to `/ping`
+and `/health`. The record has a UTC timestamp, event name, method, route
+template, input summary, output summary, and `duration_ms`.
+
+The input summary records JSON field names and character counts for text-like
+fields, not their contents. It records only whether a creator ID was present,
+not its value. The output summary records the status code, response fields,
+and selected outcome fields; it does not copy the full response body.
+
+The log is append-only. Preserve it for your capstone run evidence. To inspect
+the latest entries in PowerShell:
+
+```powershell
+Get-Content .\logs\runtime.jsonl -Tail 10
+```
+
+In Bash, use `tail -n 10 logs/runtime.jsonl`.
+
 Then try the route you're going to build:
 
 ```bash
