@@ -991,6 +991,25 @@ and [after evaluation](./results/run_2026-11-05_0917_after.md).
 
 ---
 
+## The Shape
+
+For Unit 9, I’m extending Provenance Guard, the submission-scoring service I
+built in Units 7 and 8, using **Shape A: deploy and instrument**. I’ll use
+**Path B: local with logs** because the service loads a local GPT-2 model whose
+memory needs exceed the course’s 512 MB free-host limit. The extension is an
+operational layer: make the local run reproducible, record structured runtime
+events with a timestamp, a safe summary of the request, the response outcome,
+and elapsed time, and measure compute time from an actual run. I’ll use
+controlled test inputs and avoid committing full private writing.
+
+**Out of scope:** I will not change the detector, scoring weights, or label
+thresholds; add another endpoint or detection capability; or deploy to a
+hosted service. I’ll keep implementation of the operational layer within
+about 90 minutes so there is time to write criteria, run and re-run the tests,
+and document the results.
+
+---
+
 ## What's Still Broken
 
 **PI02** is still broken. Its model and style scores (0.2044 and 0.1093)
