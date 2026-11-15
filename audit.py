@@ -121,11 +121,34 @@ def log_rejection(creator_id: str, reason: str, **extra) -> dict:
     })
 
 
+def log_runtime_event(
+    method: str,
+    route: str,
+    input_summary: dict,
+    output_summary: dict,
+    duration_ms: float,
+) -> dict:
+    """Append a privacy-conscious summary of one completed HTTP request."""
+    return _append_to(config.RUNTIME_LOG, {
+        "timestamp": _now(),
+        "event": "http_request",
+        "method": method,
+        "route": route,
+        "input": input_summary,
+        "output": output_summary,
+        "duration_ms": duration_ms,
+    })
+
+
 def _append(entry: dict) -> dict:
+    return _append_to(config.AUDIT_LOG, entry)
+
+
+def _append_to(path, entry: dict) -> dict:
     config.LOG_DIR.mkdir(parents=True, exist_ok=True)
     line = json.dumps(entry, ensure_ascii=False)
     with _lock:
-        with config.AUDIT_LOG.open("a", encoding="utf-8") as f:
+        with path.open("a", encoding="utf-8") as f:
             f.write(line + "\n")
     return entry
 

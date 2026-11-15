@@ -27,14 +27,67 @@ Routes:
 """
 
 import hmac
+import time
 import uuid
 
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 
 import audit
 import config
 
 app = Flask(__name__)
+
+
+@app.before_request
+def start_request_timer():
+    g.request_started_at = time.perf_counter()
+
+
+@app.after_request
+def log_request(response):
+    started_at = getattr(g, "request_started_at", None)
+    if started_at is None:
+        return response
+
+    payload = request.get_json(silent=True)
+    input_summary: dict[str, object] = {
+        "query_fields": sorted(request.args.keys()),
+    }
+    if isinstance(payload, dict):
+        input_summary["json_fields"] = sorted(payload.keys())
+        for field in ("text", "message", "reasoning"):
+            value = payload.get(field)
+            if isinstance(value, str):
+                input_summary[f"{field}_characters"] = len(value)
+        input_summary["creator_id_present"] = (
+            isinstance(payload.get("creator_id"), str)
+            and bool(payload["creator_id"].strip())
+        )
+    elif payload is not None:
+        input_summary["json_type"] = type(payload).__name__
+    elif request.content_length is not None:
+        input_summary["content_length"] = request.content_length
+
+    response_payload = response.get_json(silent=True)
+    output_summary: dict[str, object] = {
+        "status_code": response.status_code,
+        "content_type": response.mimetype,
+    }
+    if isinstance(response_payload, dict):
+        output_summary["json_fields"] = sorted(response_payload.keys())
+        for field in ("ok", "guess", "error", "status"):
+            value = response_payload.get(field)
+            if isinstance(value, (str, int, float, bool)):
+                output_summary[field] = value
+
+    audit.log_runtime_event(
+        method=request.method,
+        route=request.url_rule.rule if request.url_rule else "unmatched",
+        input_summary=input_summary,
+        output_summary=output_summary,
+        duration_ms=round((time.perf_counter() - started_at) * 1000, 3),
+    )
+    return response
 
 
 # ── Rate limiting — UNIT 8 ────────────────────────────────────────────────────
