@@ -8,20 +8,38 @@ assumed — the starter ships one that already answers.
 
 ---
 
-## Before your first class
+## Environment and setup
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+The service is tested with Python 3.11–3.13. It uses Flask, PyTorch, and
+Transformers from `requirements.txt`; the local `gpt2` model is about 550 MB
+and is downloaded to the Hugging Face cache on first use. A machine with at
+least 4 GB RAM and about 9 GB free disk space is recommended by `test.py`.
+
+In PowerShell, from the repository root:
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 python test.py
 ```
 
-**You're ready when `python test.py` passes.**
+If PowerShell blocks activation, allow it for the current terminal only, then
+activate the environment:
 
-You'll see `[WARN] Detector model — not downloaded yet`:
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+.\.venv\Scripts\Activate.ps1
+```
 
-```bash
+The measured capstone run used Python 3.13.16, PyTorch 2.15.0+cpu, 15.8 GB
+RAM, and had 574.3 GB free disk space. `python test.py` passed all nine checks.
+The model files were already cached; the first request in a new server process
+still loads the model into memory.
+
+If `python test.py` reports that the model has not been downloaded yet:
+
+```powershell
 python detector.py
 ```
 
@@ -68,17 +86,45 @@ sent it data, it sent something back.
 `/ping` still answers: if it does, the problem is in your handler; if it
 doesn't, it's the service itself, and that's a help-channel question.
 
-Then try the route you're going to build:
+## Unit 9 local run and runtime log
 
-```bash
-curl -X POST http://127.0.0.1:5000/submit \
-  -H "Content-Type: application/json" \
-  -d '{"text": "some writing", "creator_id": "me"}'
+With the virtual environment active and the model cached, start the service
+from the repository root with this single command:
+
+```powershell
+python app.py
 ```
 
-In the untouched starter, this returns a `501` saying the route isn't built
-yet. **That's the correct starting position.** Once you implement Milestones
-3–5, it returns the scores and label instead.
+Leave that terminal running. In a second terminal, activate the same
+environment and send requests to `http://127.0.0.1:5000`. The app binds to
+loopback by default; no hosted service or API key is used.
+
+Each completed HTTP request appends one JSON object to `logs/runtime.jsonl`,
+including requests to `/ping`, `/health`, and rejected `/submit` calls. The
+record has a UTC timestamp, event name, method, route template, input summary,
+output summary, and `duration_ms`.
+
+The input summary records JSON field names and character counts for text-like
+fields, not their contents. It records only whether a creator ID was present,
+not its value. The output summary records the status code, response fields,
+and selected outcome fields; it does not copy the full response body.
+Successful `POST /submit` entries also include the generated `content_id` so
+you can match a request to its decision in `logs/audit.jsonl`. It does not
+include the submitted text or creator ID.
+
+The log is append-only. Preserve it for your capstone run evidence. To inspect
+the latest entries in PowerShell:
+
+```powershell
+Get-Content .\logs\runtime.jsonl -Tail 10
+```
+
+In Bash, use `tail -n 10 logs/runtime.jsonl`.
+
+This Unit 9 run was verified from the existing `capstone` working copy rather
+than a fresh clone. To reproduce it, check out the `capstone` branch, install
+the requirements above, run `python test.py`, and start the service with
+`python app.py`.
 
 ---
 
@@ -249,20 +295,22 @@ your write-up; that's the deliverable.
 
 ## Where everything lives
 
-| File | What it does |
+| File or folder | What it does now |
 |---|---|
-| `config.py` | Every setting: thresholds, weights, rate limits, the model |
-| `app.py` | The service. `/ping` and `/log` work; `/submit` and `/appeal` are yours |
-| `detector.py` | Signal one — the local model. Given to you |
-| `stylometry.py` | Signal two. **Stubs — you build these** |
-| `scoring.py` | Combining and labelling. **Stubs — you build these** |
-| `audit.py` | The audit log writer. Given to you |
-| `run_attacks.py` | Runs the attack set — **unit 8** |
-| `run_eval.py` | Runs your criteria three times — **unit 8** |
-| `scenarios.py` | What your test runs. **You fill this in** |
-| `criteria.md` | Your five criteria. **You write all five** |
-| `logs/audit.jsonl` | Your audit log. **Commit it** |
-| `results/` | Attack runs and run logs. **Commit them** |
+| `config.py` | Model, thresholds, score weights, rate limits, and log paths |
+| `app.py` | Flask routes, including `/submit`, `/appeal`, `/health`, and per-request runtime logging |
+| `detector.py` | Local model signal used to score submitted text |
+| `stylometry.py` | Implemented style and repeated-phrase signals |
+| `scoring.py` | Combines signal scores and maps them to a label |
+| `audit.py` | Writes audit decisions/rejections and structured runtime events |
+| `run_attacks.py` | Unit 8 attack-set and rate-limit tests |
+| `run_eval.py` | Unit 8 five-criterion evaluator |
+| `scenarios.py` | Inputs used by the Unit 8 evaluator |
+| `test_observability.py` | Focused Unit 9 tests for runtime logging, privacy, and request-to-audit correlation |
+| `criteria.md` | Separate Unit 7 and Unit 9 acceptance criteria |
+| `logs/audit.jsonl` | Append-only audit decisions and rejections; preserve the evidence used in the write-up |
+| `logs/runtime.jsonl` | Append-only HTTP request records; preserve the Unit 9 run evidence used in the write-up |
+| `results/` | Unit 8 attack and evaluation outputs; preserve the run evidence used in the write-up |
 
 ---
 
@@ -292,7 +340,7 @@ sentences, a pasted quotation. That is very cheap to do on purpose.
 
 | What you see | What it means |
 |---|---|
-| `501 not_implemented` | Correct at the start — that's the TODO in `app.py` |
+| `501 not_implemented` | This applied only to the untouched Unit 7 starter; `/submit` is implemented in this capstone branch |
 | `404` from curl | Is the server running? Is the path exactly what you typed? |
 | `Cannot bind parameter 'Headers'` | You're in PowerShell, where `curl` is a different tool. Use `curl.exe`, on one line |
 | Request body arrives empty | curl needs `-H "Content-Type: application/json"` |
@@ -314,8 +362,12 @@ in your handler.
 
 At least four new commits in unit 7, four more in unit 8.
 
-`logs/` and `results/` are deliberately **not** in `.gitignore`. Your audit log
-is evidence, and the entries you paste into your README are what unit 8 grades.
+`logs/` and `results/` are deliberately tracked because they contain run
+evidence, not source code or disposable caches. Commit the evidence required
+by the relevant unit and referenced in your write-up. Unit 9 also uses
+`logs/runtime.jsonl` to show what the running service recorded. Ad-hoc checks
+append more rows, so inspect the logs before committing and keep clear which
+entries belong to the measured trials.
 
-**Do not delete and recreate this repository.** You submit the same URL both
-units.
+**Do not delete and recreate this repository.** Keep using the same repository
+for the course units.

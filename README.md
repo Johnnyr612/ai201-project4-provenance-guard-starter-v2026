@@ -989,31 +989,27 @@ and [after report](./results/attack_run_2026-11-05_0916_after.md). The
 three-trial records are in the [before evaluation](./results/run_2026-11-04_2252_before.md)
 and [after evaluation](./results/run_2026-11-05_0917_after.md).
 
----
-
-## What's Still Broken
+## Unit 8 — What's Still Broken
 
 **PI02** is still broken. Its model and style scores (0.2044 and 0.1093)
 combine to 0.1255, below the new 0.18 human cutoff. The failure spans
 **signals one and two**, the **combining rule**, and ultimately the **label
 mapping**; lowering the threshold alone cannot fix those low component
 scores. I stopped at this one surgical change rather than tuning the signals
-against the same small attack set and risking overfitting. A next test should
-add diverse, human-reviewed samples and examine minimum text length and signal
-behavior on short inputs.
+against the same small attack set and risking overfitting.
 
 The audit-schema omission on rejected events is fixed for new entries.
 Previously written rejection entries remain in the append-only log with their
 original, shorter shape; I did not rewrite historical records.
 
-No acceptance criterion was missed in the three after trials, but meeting
-criterion 1 by returning `unsure` for every personal sample is not a useful
-human-writing experience. The evaluation set is small and the criteria do
-not require enough confidently human or AI labels to prove useful coverage.
-Criterion 1 is the target I would tighten in a future evaluation: keep its
-original false-positive ceiling, and add a separate minimum for how many of
-my own samples must receive the human label. I am not rewriting the original
-criterion because it was measurable and was met.
+No Unit 8 acceptance criterion was missed in its three after trials, but
+meeting Unit 8 Criterion 1 by returning `unsure` for every personal sample is
+not a useful human-writing experience. The evaluation set is small and the
+criteria do not require enough confidently human or AI labels to prove useful
+coverage. Unit 8 Criterion 1 is the target I would tighten in a future
+evaluation: keep its original false-positive ceiling, and add a separate
+minimum for how many of my own samples must receive the human label. I am not
+rewriting the original criterion because it was measurable and was met.
 
 **The trade I'd make if this ran for real:**
 
@@ -1023,10 +1019,393 @@ caution through inconclusive results and appeals, while readers and reviewers
 pay because some AI-written text, including PI02, can still receive a human
 label.
 
-## Milestone 6 submission
+## Unit 8 — Milestone 6 submission
 
 The project is on my fork, not the CodePath starter:
 [https://github.com/Johnnyr612/ai201-project4-provenance-guard-starter-v2026](https://github.com/Johnnyr612/ai201-project4-provenance-guard-starter-v2026)
+
+---
+
+## Capstone (UNIT 9)
+
+**What This Extends**
+
+I am extending Provenance Guard, the submission-scoring service I built in
+Units 7 and 8. Unit 9 adds a reproducible local run path, structured
+per-request runtime logs, request-to-audit traceability through `content_id`,
+and measured runtime cost. It does not change how the detector scores or
+labels text.
+
+**The Shape**
+
+I chose **Shape A: deploy and instrument**, using **Path B: local with logs**.
+The service loads a local GPT-2 model whose memory needs exceed the course's
+512 MB free-host limit. The extension adds observability around the existing
+scoring service; it does not change the detector or its labels.
+
+**Out of scope:** I will not change the detector, scoring weights, or label
+thresholds; add another endpoint or detection capability; or deploy to a
+hosted service. I kept implementation of the operational layer within
+about 90 minutes so there is time to write criteria, run and re-run the tests,
+and document the results.
+
+**Running It**
+
+This is the local-with-logs path: activate the project's `.venv`, ensure
+`requirements.txt` is installed and the GPT-2 weights are cached, then run
+`python app.py` from the repository root. Requests go to
+`http://127.0.0.1:5000`; there is no hosted URL. The exact setup and start
+instructions are in [RUNNING.md](./RUNNING.md). I verified the run in the
+existing `capstone` checkout; the clean-clone check remains unverified.
+
+**Instrumentation**
+
+The service now writes one structured event for each completed HTTP request
+to `logs/runtime.jsonl`. Each JSONL record includes a UTC timestamp, event,
+method, route template, input summary, output summary, and elapsed time in
+milliseconds. Input summaries retain field names and character counts rather
+than submitted writing or creator ID values. This privacy description applies
+to `logs/runtime.jsonl`: the separate `logs/audit.jsonl` continues to record
+creator IDs with decisions and rejections. Output summaries retain the status
+code and selected result fields rather than copying the full response.
+Successful `POST /submit` runtime records include the generated `content_id`
+so the request can be matched to its decision in the audit log; raw text and
+creator ID values are omitted from the runtime record.
+
+The instrumentation wraps the existing Flask request lifecycle; the scoring
+routes and their responses are unchanged. Run the existing smoke check with
+`python test.py` and the focused instrumentation tests with
+`python -m unittest -v test_observability.py`.
+
+On the reported machine, `python test.py` passed all 9 checks with Python
+3.13.16, PyTorch 2.15.0+cpu, 15.8 GB RAM, and 574.3 GB free disk space. The
+detector weights were present in the Hugging Face cache, but `/health` showed
+`detector_loaded: false` before the first scored request because the model had
+not yet been loaded into that server process. The first scoring request took
+9.213 seconds; later requests took about 47–71 milliseconds. Transformers
+printed a `loss_type=None` warning and continued with its default loss; all
+ten submissions still returned HTTP 200.
+
+The `/ping` control returned HTTP 200, `/health` returned `ok: true`, and ten
+controlled 172-character `/submit` requests returned HTTP 200 with a `human`
+label. The following are the ten successful records and the invalid-input failure
+record copied from `logs/runtime.jsonl`. They contain input length and field
+names, not the submitted text or creator IDs.
+
+```json
+{"timestamp":"2026-11-16T02:38:49+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":9213.277}
+{"timestamp":"2026-11-16T02:38:49+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":54.814}
+{"timestamp":"2026-11-16T02:38:49+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":70.489}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":49.09}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":55.375}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":63.695}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":51.297}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":54.468}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":49.937}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":46.666}
+{"timestamp":"2026-11-16T02:39:09+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":0,"creator_id_present":true},"output":{"status_code":400,"content_type":"application/json","json_fields":["error","message"],"error":"invalid_text"},"duration_ms":1.361}
+```
+
+The failed-path entry is an intentionally empty `text` submission. It was
+rejected with HTTP 400 and `invalid_text`; a subsequent `GET /health` returned
+`ok: true` and HTTP 200. The rejection is also present in `logs/audit.jsonl`.
+
+**What It Costs**
+
+There is no API or token charge: the detector runs locally. I measured
+server-side `duration_ms`, written using `time.perf_counter` around each
+request. The latest measurement used the same controlled 172-character text
+for ten sequential submissions in each of three fresh processes; the model
+weights were cached, but the model was unloaded at the start of each process.
+The three ten-request means were 497.295, 498.628, and 498.973 ms, for a
+pooled mean of **498.299 ms (0.498 seconds) per submission**, including one
+cold model load in each trial. The three first requests averaged 4.502542 s;
+the remaining 27 warm requests averaged 53.383 ms.
+
+Assuming one submission per person per day, `100 × 0.498299 s = 49.83 s/day`
+of measured request-processing time; a long-lived process is closer to
+`1 × 4.502542 s + 99 × 0.053383 s = 9.79 s/day`, excluding idle time and
+electricity, which I did not measure.
+
+For comparison, the earlier Unit 9 Milestone 3 baseline averaged 970.911 ms
+per submission, including a 9,213.277 ms first request and nine warm requests
+averaging 55.092 ms. The two measurements use the same timing field; the
+different cold-load times show why I include the first request and report the
+method instead of treating a pricing-page estimate as a measurement.
+
+**Run Log and Verdicts**
+
+I ran criteria 1–3 and 5 in three separate service processes. In each process,
+the startup `/health` and `/ping` checks ran first; criterion 1 then measured a
+separate block of ten requests (one ping, eight valid submissions, and one
+empty-text submission). Criterion 3 checked the rejection and then called
+`/health` again. Criterion 4 used three additional fresh processes; `/health`
+reported `detector_loaded: false` before each set of ten submissions, so the
+first request's model load is included. Each fresh process used the documented
+`python app.py` command with the active virtual environment's Python.
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Runtime records cover each response | 10 matching records per trial | 10/10; 9 HTTP 200, 1 HTTP 400 | 10/10; 9 HTTP 200, 1 HTTP 400 | 10/10; 9 HTTP 200, 1 HTTP 400 | MET |
+| 2. Runtime records omit submitted values | 0 raw values in the new entries | 0/11 found | 0/11 found | 0/11 found | MET |
+| 3. Empty-text failure is returned and recorded | JSON 400 `invalid_text`, one runtime and audit rejection, then health 200 | All conditions met | All conditions met | All conditions met | MET |
+| 4. Ten-request compute time stays within budget | Mean <= 2,000 ms, including first request | 510.531 ms | 505.922 ms | 493.668 ms | MET |
+| 5. Documented local control routes start in time | `/health` and `/ping` return HTTP 200 within 10 seconds | 200/200 at 0.776/0.807 s | 200/200 at 0.789/0.794 s | 200/200 at 0.743/0.748 s | MET |
+
+### Criterion 1 — Run 1 runtime entries
+
+These are the ten consecutive JSONL records added by criterion 1's request
+block. Their `output.status_code` values match the ten HTTP responses in order.
+The records are written by `audit.py::log_runtime_event`, called from
+`app.py::log_request`.
+
+```json
+{"timestamp": "2026-11-16T03:29:14+00:00", "event": "http_request", "method": "POST", "route": "/ping", "input": {"query_fields": [], "json_fields": ["message"], "message_characters": 23, "creator_id_present": false}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["ok", "service", "you_sent"], "ok": true}, "duration_ms": 0.191}
+{"timestamp": "2026-11-16T03:29:26+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 127, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 12748.92}
+{"timestamp": "2026-11-16T03:29:26+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 127, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 58.861}
+{"timestamp": "2026-11-16T03:29:26+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 127, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 53.089}
+{"timestamp": "2026-11-16T03:29:27+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 127, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 48.211}
+{"timestamp": "2026-11-16T03:29:27+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 127, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 51.615}
+{"timestamp": "2026-11-16T03:29:27+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 127, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 54.118}
+{"timestamp": "2026-11-16T03:29:27+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 127, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 48.227}
+{"timestamp": "2026-11-16T03:29:27+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 127, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 54.854}
+{"timestamp": "2026-11-16T03:29:27+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 0, "creator_id_present": true}, "output": {"status_code": 400, "content_type": "application/json", "json_fields": ["error", "message"], "error": "invalid_text"}, "duration_ms": 0.964}
+```
+
+### Criterion 2 — Run 1 privacy check
+
+The checker compared all ten new runtime entries against the literal ping
+message, valid test text, and eight submitted creator IDs plus the failed
+request's creator ID. This is a representative actual record from
+`logs/runtime.jsonl`; it keeps the text length and presence flag, not those
+values. The record is produced by `audit.py::log_runtime_event` from
+`app.py::log_request`.
+
+```json
+{"timestamp": "2026-11-16T03:29:26+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 127, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 58.861}
+```
+
+```text
+{"raw_values_checked":11,"none_found_in_runtime_entries":true}
+```
+
+### Criterion 3 — Run 1 rejected request
+
+The response is from `app.py::submit`; the runtime record comes from
+`app.py::log_request` and `audit.py::log_runtime_event`; the audit record comes
+from the route's rejection handler and `audit.py::log_rejection`. The final
+response is from `app.py::health`.
+
+```text
+POST /submit -> HTTP 400
+{
+  "error": "invalid_text",
+  "message": "text must be a non-empty string."
+}
+```
+
+```json
+{"timestamp": "2026-11-16T03:29:27+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 0, "creator_id_present": true}, "output": {"status_code": 400, "content_type": "application/json", "json_fields": ["error", "message"], "error": "invalid_text"}, "duration_ms": 0.964}
+{"error": "invalid_text", "status_code": 400, "timestamp": "2026-11-16T03:29:27+00:00", "content_id": null, "creator_id": "u9-c1-t1-empty", "guess": null, "model_score": null, "style_score": null, "combined_score": null, "label": null, "status": "rejected", "event": "rejected", "reason": "invalid_text"}
+```
+
+```text
+GET /health -> HTTP 200
+{
+  "detector_loaded": true,
+  "detector_model": "gpt2",
+  "log_entries": 1096,
+  "ok": true,
+  "rate_limiting": true
+}
+```
+
+### Criterion 4 — Run 1 timing records
+
+These are all ten records used for Run 1's arithmetic mean. They were read
+from `logs/runtime.jsonl`; `audit.py::log_runtime_event`, called by
+`app.py::log_request`, records each `duration_ms`.
+
+```json
+{"timestamp": "2026-11-16T03:29:47+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 4632.763}
+{"timestamp": "2026-11-16T03:29:47+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 55.97}
+{"timestamp": "2026-11-16T03:29:47+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 53.05}
+{"timestamp": "2026-11-16T03:29:47+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 47.552}
+{"timestamp": "2026-11-16T03:29:47+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 51.678}
+{"timestamp": "2026-11-16T03:29:47+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 52.328}
+{"timestamp": "2026-11-16T03:29:47+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 54.614}
+{"timestamp": "2026-11-16T03:29:47+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 53.092}
+{"timestamp": "2026-11-16T03:29:47+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 49.091}
+{"timestamp": "2026-11-16T03:29:48+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human"}, "duration_ms": 55.172}
+```
+
+### Criterion 5 — Run 1 startup responses
+
+The documented command was run in a fresh process. Times are measured from
+process launch through each HTTP response. `/health` and `/ping` are handled
+by `app.py::health` and `app.py::ping`.
+
+```text
+GET /health -> HTTP 200 at 0.776 s
+{
+  "detector_loaded": false,
+  "detector_model": "gpt2",
+  "log_entries": 1087,
+  "ok": true,
+  "rate_limiting": true
+}
+
+POST /ping -> HTTP 200 at 0.807 s
+{
+  "ok": true,
+  "service": "provenance-guard",
+  "you_sent": "u9-control-trial-1"
+}
+```
+
+**The Improvement**
+
+### Diagnosis and chosen improvement
+
+None of the five Unit 9 criteria was missed in the Milestone 5 baseline. The
+expected empty-text rejection was returned as HTTP 400 and logged; it was not
+a system failure. I do not think every target was set too low, but Unit 9
+Criterion 1 was too narrow: it counted runtime records and compared response
+codes without requiring a link from a successful `/submit` request to its
+audit decision.
+The stage was `app.py::log_request`; the mechanism was that its output summary
+kept the status and guess but discarded the generated `content_id`. That left
+someone diagnosing a request unable to identify its audit decision directly.
+
+I would tighten Unit 9 Criterion 1 in a future test to require all eight valid
+submissions in each trial to have a `content_id` in the runtime event matching
+the corresponding audit decision. I have not changed the original
+Milestone 4 criterion or its target after seeing the results.
+
+The one improvement adds the generated `content_id` to successful
+`POST /submit` runtime records only. It does not log the submitted text or
+creator ID, and it does not change response bodies, scoring, or other routes.
+The focused test now verifies that a submit response, its runtime event, and
+its audit decision share the same ID.
+
+### Before-and-after run log
+
+The before results are the three Milestone 5 trials above. For the after
+trials, Criteria 1–3 and 5 were run in three fresh processes; Criterion 4 was
+run in three additional fresh processes with the model initially unloaded.
+Each C1 trial also checked all eight valid submissions for runtime-to-audit
+ID correlation.
+
+| Criterion | Target | Before R1 | Before R2 | Before R3 | Before verdict | After R1 | After R2 | After R3 | After verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| 1. Runtime records cover each response | 10 matching records per trial | 10/10; 9×200, 1×400 | 10/10; 9×200, 1×400 | 10/10; 9×200, 1×400 | MET | 10/10; 8/8 IDs linked | 10/10; 8/8 IDs linked | 10/10; 8/8 IDs linked | MET |
+| 2. Runtime records omit submitted values | 0 raw values in the new entries | 0/11 found | 0/11 found | 0/11 found | MET | 0/11 found | 0/11 found | 0/11 found | MET |
+| 3. Empty-text failure is returned and recorded | JSON 400 `invalid_text`, one runtime and audit rejection, then health 200 | All conditions met | All conditions met | All conditions met | MET | All conditions met | All conditions met | All conditions met | MET |
+| 4. Ten-request compute time stays within budget | Mean <= 2,000 ms, including first request | 510.531 ms | 505.922 ms | 493.668 ms | MET | 497.295 ms | 498.628 ms | 498.973 ms | MET |
+| 5. Documented local control routes start in time | `/health` and `/ping` return HTTP 200 within 10 seconds | 0.776/0.807 s | 0.789/0.794 s | 0.743/0.748 s | MET | 0.850/0.881 s | 0.765/0.770 s | 0.788/0.793 s | MET |
+
+### After-run evidence
+
+**Criteria 1 and 2, Run 1:** This actual runtime row contains the generated
+ID but neither the submitted text nor creator ID. The matching audit row
+contains the same ID. The checker matched 8/8 valid submit events in each of
+the three operational trials. The runtime row is produced by
+`audit.py::log_runtime_event` from `app.py::log_request`; the audit row is
+produced by `audit.py::log_decision` from `app.py::submit`.
+
+```json
+{"timestamp": "2026-11-16T03:43:13+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 133, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human", "content_id": "c6348bf7-de2b-4c31-bee2-5aa720063ff1"}, "duration_ms": 4784.842}
+{"timestamp": "2026-11-16T03:43:13+00:00", "content_id": "c6348bf7-de2b-4c31-bee2-5aa720063ff1", "creator_id": "u9-after-c1-t1-user1", "guess": "human", "model_score": 0.0486, "style_score": 0.0523, "combined_score": 0.0404, "label": "We think this was probably written by a person.", "status": "decided", "repetition_score": 0.0, "verified_human": false}
+```
+
+```text
+{"raw_values_checked":11,"none_found":true}
+```
+
+**Criterion 3, Run 1:** The test returned HTTP 400 with `invalid_text`; one
+runtime rejection and one audit rejection were recorded, and the following
+health check returned HTTP 200. This is the runtime JSONL rejection row and
+the matching audit row from the after trial.
+
+```json
+{"timestamp": "2026-11-16T03:43:13+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 0, "creator_id_present": true}, "output": {"status_code": 400, "content_type": "application/json", "json_fields": ["error", "message"], "error": "invalid_text"}, "duration_ms": 1.011}
+{"error": "invalid_text", "status_code": 400, "timestamp": "2026-11-16T03:43:13+00:00", "content_id": null, "creator_id": "u9-after-c1-t1-empty", "guess": null, "model_score": null, "style_score": null, "combined_score": null, "label": null, "status": "rejected", "event": "rejected", "reason": "invalid_text"}
+```
+
+**Criterion 4, Run 1:** These are the ten actual `logs/runtime.jsonl` rows
+used to calculate the 497.295 ms mean, including the first model-load request.
+Each row is produced by `audit.py::log_runtime_event` from
+`app.py::log_request`.
+
+```json
+{"timestamp": "2026-11-16T03:43:34+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human", "content_id": "d941c953-e06f-4d88-bb4f-6ce55b4a1e0d"}, "duration_ms": 4499.565}
+{"timestamp": "2026-11-16T03:43:34+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human", "content_id": "f5727010-f58a-45a8-ac5c-4adbf9fbe112"}, "duration_ms": 53.62}
+{"timestamp": "2026-11-16T03:43:34+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human", "content_id": "11a1d3fc-427c-4f63-b456-b256b1d337d1"}, "duration_ms": 51.294}
+{"timestamp": "2026-11-16T03:43:34+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human", "content_id": "b76fb43a-7024-46e8-b329-4daefb290b6d"}, "duration_ms": 48.841}
+{"timestamp": "2026-11-16T03:43:34+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human", "content_id": "d3d6ff34-5c32-4385-aeeb-b112118fd268"}, "duration_ms": 53.863}
+{"timestamp": "2026-11-16T03:43:34+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human", "content_id": "eeefa8f0-c60c-4ee2-b8c4-86d287a68f12"}, "duration_ms": 50.875}
+{"timestamp": "2026-11-16T03:43:34+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human", "content_id": "35f8d281-2071-413b-913b-e22a51511d1e"}, "duration_ms": 55.245}
+{"timestamp": "2026-11-16T03:43:34+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human", "content_id": "2d2b7334-bab6-4ae1-b979-ccc4ac2c9fb6"}, "duration_ms": 52.103}
+{"timestamp": "2026-11-16T03:43:34+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human", "content_id": "b5a39bb0-e02f-4c10-a6d8-2ee67d76346e"}, "duration_ms": 49.305}
+{"timestamp": "2026-11-16T03:43:34+00:00", "event": "http_request", "method": "POST", "route": "/submit", "input": {"query_fields": [], "json_fields": ["creator_id", "text"], "text_characters": 172, "creator_id_present": true}, "output": {"status_code": 200, "content_type": "application/json", "json_fields": ["combined_score", "confidence", "content_id", "creator_credential", "guess", "label", "model_score", "repetition_score", "style_score", "verified_human"], "guess": "human", "content_id": "df8819f4-94ff-4b88-827f-40ff02ae9c12"}, "duration_ms": 58.238}
+```
+
+**Criterion 5, Run 1:** `GET /health` returned HTTP 200 at 0.850 s after
+process launch and `POST /ping` returned HTTP 200 at 0.881 s. In all three
+trials the two control routes returned 200 within 10 seconds. The routes are
+implemented by `app.py::health` and `app.py::ping`.
+
+### Result
+
+The improvement helped the system's observability: all 54 successful submit
+events from the after trials (24 operational checks and 30 timing requests)
+had a runtime `content_id` matching an audit decision. It did not materially
+change timing: the after means remained around 0.50 seconds, compared with
+about 0.49–0.51 seconds before. All five original criteria remained MET in
+all three trials after the change; the original failure behavior and HTTP
+responses were preserved.
+
+**What's Still Broken**
+
+No Unit 9 criterion was missed. Unit 9 Criterion 1 was too narrow on
+observability: its original target checked that runtime records existed, but
+did not require those records to link to audit decisions. The Milestone 6
+change added and verified that link for all eight valid submissions in each
+trial. The system met the original target; the target I would tighten in a
+future evaluation is all eight valid submissions per trial having matching
+runtime and audit `content_id` values. This is an evaluation gap, not the
+Unit 8 detector limitation described earlier.
+
+**Next Unit**
+
+First, I would run the instrumented service continuously for a week at the
+planned 100 submissions per day while recording uptime, CPU, memory, and log
+growth. That is the next step because the current local trials measure
+request latency but do not show whether the service remains stable under
+sustained operation.
+
+**How I Used AI**
+
+**Moment 1 — choosing the extension**
+
+- **What I asked:** I asked AI to brainstorm bounded capstone options and give
+  me a second opinion on whether local deployment with logs fit this project.
+- **What I got:** It helped compare the hosted and local paths and pointed out
+  that the local GPT-2 model would not fit the free-host memory limit.
+- **What I changed:** I chose the local-with-logs path and kept detector
+  accuracy changes out of scope.
+
+**Moment 2 — diagnosing traceability**
+
+- **What I asked:** I asked AI to review the Unit 9 results and identify one
+  improvement that followed from the diagnosis.
+- **What I got:** It noticed that a successful request's runtime record did
+  not include the `content_id` needed to find the corresponding audit decision.
+- **What I changed:** I reviewed and kept the improvement to adding that ID to
+  successful `/submit` runtime records. I ran the focused tests and a live
+  request, then checked that the response, runtime record, and audit record
+  shared the ID and that the runtime record omitted submitted text and creator
+  ID values.
 
 
 
