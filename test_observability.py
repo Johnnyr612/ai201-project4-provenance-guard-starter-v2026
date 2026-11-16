@@ -16,10 +16,12 @@ class RuntimeLoggingTests(unittest.TestCase):
 
         log_dir = Path(self.temp_dir.name)
         self.runtime_log = log_dir / "runtime.jsonl"
+        self.audit_log = log_dir / "audit.jsonl"
         self.config_patch = patch.multiple(
             config,
             LOG_DIR=log_dir,
             RUNTIME_LOG=self.runtime_log,
+            AUDIT_LOG=self.audit_log,
         )
         self.config_patch.start()
         self.addCleanup(self.config_patch.stop)
@@ -52,6 +54,36 @@ class RuntimeLoggingTests(unittest.TestCase):
         self.assertIsInstance(event["duration_ms"], (int, float))
         self.assertGreaterEqual(event["duration_ms"], 0)
         self.assertNotIn(message, self.runtime_log.read_text(encoding="utf-8"))
+
+    def test_submit_runtime_event_correlates_with_audit_decision(self):
+        text = "A controlled sample for checking runtime and audit correlation."
+        creator_id = "private-correlation-test-writer"
+        with (
+            patch("detector.model_signal", return_value=0.4),
+            patch("stylometry.style_signal", return_value=0.4),
+            patch("stylometry.repetition_signal", return_value=0.0),
+        ):
+            response = self.client.post(
+                "/submit",
+                json={"text": text, "creator_id": creator_id},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        content_id = response.get_json()["content_id"]
+        event = self.read_events()[0]
+        self.assertEqual(event["output"]["content_id"], content_id)
+
+        audit_entries = [
+            json.loads(line)
+            for line in self.audit_log.read_text(encoding="utf-8").splitlines()
+        ]
+        self.assertTrue(
+            any(entry.get("content_id") == content_id for entry in audit_entries)
+        )
+
+        runtime_text = self.runtime_log.read_text(encoding="utf-8")
+        self.assertNotIn(text, runtime_text)
+        self.assertNotIn(creator_id, runtime_text)
 
     def test_unknown_content_response_is_logged(self):
         response = self.client.get(f"/content/{uuid.uuid4()}")

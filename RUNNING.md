@@ -108,6 +108,9 @@ The input summary records JSON field names and character counts for text-like
 fields, not their contents. It records only whether a creator ID was present,
 not its value. The output summary records the status code, response fields,
 and selected outcome fields; it does not copy the full response body.
+Successful `POST /submit` entries also include the generated `content_id` so
+you can match a request to its decision in `logs/audit.jsonl`. It does not
+include the submitted text or creator ID.
 
 The log is append-only. Preserve it for your capstone run evidence. To inspect
 the latest entries in PowerShell:

@@ -79,6 +79,14 @@ def log_request(response):
             value = response_payload.get(field)
             if isinstance(value, (str, int, float, bool)):
                 output_summary[field] = value
+        content_id = response_payload.get("content_id")
+        if (
+            request.method == "POST"
+            and request.url_rule is not None
+            and request.url_rule.rule == "/submit"
+            and isinstance(content_id, str)
+        ):
+            output_summary["content_id"] = content_id
 
     audit.log_runtime_event(
         method=request.method,
