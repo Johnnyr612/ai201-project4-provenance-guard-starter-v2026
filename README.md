@@ -989,26 +989,76 @@ and [after report](./results/attack_run_2026-11-05_0916_after.md). The
 three-trial records are in the [before evaluation](./results/run_2026-11-04_2252_before.md)
 and [after evaluation](./results/run_2026-11-05_0917_after.md).
 
+## Unit 8 — What's Still Broken
+
+**PI02** is still broken. Its model and style scores (0.2044 and 0.1093)
+combine to 0.1255, below the new 0.18 human cutoff. The failure spans
+**signals one and two**, the **combining rule**, and ultimately the **label
+mapping**; lowering the threshold alone cannot fix those low component
+scores. I stopped at this one surgical change rather than tuning the signals
+against the same small attack set and risking overfitting.
+
+The audit-schema omission on rejected events is fixed for new entries.
+Previously written rejection entries remain in the append-only log with their
+original, shorter shape; I did not rewrite historical records.
+
+No Unit 8 acceptance criterion was missed in its three after trials, but
+meeting Unit 8 Criterion 1 by returning `unsure` for every personal sample is
+not a useful human-writing experience. The evaluation set is small and the
+criteria do not require enough confidently human or AI labels to prove useful
+coverage. Unit 8 Criterion 1 is the target I would tighten in a future
+evaluation: keep its original false-positive ceiling, and add a separate
+minimum for how many of my own samples must receive the human label. I am not
+rewriting the original criterion because it was measurable and was met.
+
+**The trade I'd make if this ran for real:**
+
+I would prefer an `unsure` result over a confident AI accusation, so writers
+would not be penalized based on these weak signals. Writers pay for that
+caution through inconclusive results and appeals, while readers and reviewers
+pay because some AI-written text, including PI02, can still receive a human
+label.
+
+## Unit 8 — Milestone 6 submission
+
+The project is on my fork, not the CodePath starter:
+[https://github.com/Johnnyr612/ai201-project4-provenance-guard-starter-v2026](https://github.com/Johnnyr612/ai201-project4-provenance-guard-starter-v2026)
+
 ---
 
-## The Shape
+## Capstone
 
-For Unit 9, I’m extending Provenance Guard, the submission-scoring service I
-built in Units 7 and 8, using **Shape A: deploy and instrument**. I’ll use
-**Path B: local with logs** because the service loads a local GPT-2 model whose
-memory needs exceed the course’s 512 MB free-host limit. The extension is an
-operational layer: make the local run reproducible, record structured runtime
-events with a timestamp, a safe summary of the request, the response outcome,
-and elapsed time, and measure compute time from an actual run. I’ll use
-controlled test inputs and avoid committing full private writing.
+**What This Extends**
+
+I am extending Provenance Guard, the submission-scoring service I built in
+Units 7 and 8. Unit 9 adds a reproducible local run path, structured
+per-request runtime logs, request-to-audit traceability through `content_id`,
+and measured runtime cost. It does not change how the detector scores or
+labels text.
+
+**The Shape**
+
+I chose **Shape A: deploy and instrument**, using **Path B: local with logs**.
+The service loads a local GPT-2 model whose memory needs exceed the course's
+512 MB free-host limit. I use controlled test inputs and do not log submitted
+writing or creator ID values.
 
 **Out of scope:** I will not change the detector, scoring weights, or label
 thresholds; add another endpoint or detection capability; or deploy to a
-hosted service. I’ll keep implementation of the operational layer within
+hosted service. I kept implementation of the operational layer within
 about 90 minutes so there is time to write criteria, run and re-run the tests,
 and document the results.
 
-### Unit 9 runtime instrumentation
+**Running It**
+
+This is the local-with-logs path: activate the project's `.venv`, ensure
+`requirements.txt` is installed and the GPT-2 weights are cached, then run
+`python app.py` from the repository root. Requests go to
+`http://127.0.0.1:5000`; there is no hosted URL. The exact setup and start
+instructions are in [RUNNING.md](./RUNNING.md). I verified the run in the
+existing `capstone` checkout; the clean-clone check remains unverified.
+
+**Instrumentation**
 
 The service now writes one structured event for each completed HTTP request
 to `logs/runtime.jsonl`. Each JSONL record includes a UTC timestamp, event,
@@ -1023,16 +1073,7 @@ and creator IDs are still omitted.
 The instrumentation wraps the existing Flask request lifecycle; the scoring
 routes and their responses are unchanged. Run the existing smoke check with
 `python test.py` and the focused instrumentation tests with
-`python -m unittest -v test_observability.py`. The reproducible local run
-command and log inspection steps are in [RUNNING.md](./RUNNING.md).
-
-## Instrumentation
-
-The local run path is `python app.py`, with requests sent from a second
-PowerShell terminal to `http://127.0.0.1:5000`. This run used the existing
-`capstone` checkout and active `.venv`; it was not run from a clean clone.
-The clean-clone check from the milestone instructions therefore remains
-unverified, as requested.
+`python -m unittest -v test_observability.py`.
 
 On the reported machine, `python test.py` passed all 9 checks with Python
 3.13.16, PyTorch 2.15.0+cpu, 15.8 GB RAM, and 574.3 GB free disk space. The
@@ -1045,9 +1086,9 @@ ten submissions still returned HTTP 200.
 
 The `/ping` control returned HTTP 200, `/health` returned `ok: true`, and ten
 controlled 172-character `/submit` requests returned HTTP 200 with a `human`
-label. The following are the ten successful records and the invalid-input
-failure record copied from `logs/runtime.jsonl`. They contain input length
-and field names, not the submitted text or creator IDs.
+label. The following are the ten successful records and the invalid-input failure
+record copied from `logs/runtime.jsonl`. They contain input length and field
+names, not the submitted text or creator IDs.
 
 ```json
 {"timestamp":"2026-11-16T02:38:49+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":9213.277}
@@ -1067,7 +1108,7 @@ The failed-path entry is an intentionally empty `text` submission. It was
 rejected with HTTP 400 and `invalid_text`; a subsequent `GET /health` returned
 `ok: true` and HTTP 200. The rejection is also present in `logs/audit.jsonl`.
 
-## What It Costs
+**What It Costs**
 
 There is no API or token charge: the detector runs locally. I measured
 server-side `duration_ms`, written using `time.perf_counter` around each
@@ -1090,7 +1131,7 @@ averaging 55.092 ms. The two measurements use the same timing field; the
 different cold-load times show why I include the first request and report the
 method instead of treating a pricing-page estimate as a measurement.
 
-## Unit 9 Milestone 5 — Run log
+**Run Log and Verdicts**
 
 I ran criteria 1–3 and 5 in three separate service processes. In each process,
 the startup `/health` and `/ping` checks ran first; criterion 1 then measured a
@@ -1220,7 +1261,7 @@ POST /ping -> HTTP 200 at 0.807 s
 }
 ```
 
-## Unit 9 Milestone 6 — Diagnose, improve, and re-test
+**The Improvement**
 
 ### Diagnosis and chosen improvement
 
@@ -1322,7 +1363,7 @@ about 0.49–0.51 seconds before. All five original criteria remained MET in
 all three trials after the change; the original failure behavior and HTTP
 responses were preserved.
 
-## Unit 9 — What's Still Broken
+**What's Still Broken**
 
 No Unit 9 criterion was missed. Unit 9 Criterion 1 was too narrow on
 observability: its original target checked that runtime records existed, but
@@ -1331,9 +1372,9 @@ change added and verified that link for all eight valid submissions in each
 trial. The system met the original target; the target I would tighten in a
 future evaluation is all eight valid submissions per trial having matching
 runtime and audit `content_id` values. This is an evaluation gap, not the
-Unit 8 detector limitation described below.
+Unit 8 detector limitation described earlier.
 
-## If I Had One More Unit
+**Next Unit**
 
 First, I would run the instrumented service continuously for a week at the
 planned 100 submissions per day while recording uptime, CPU, memory, and log
@@ -1341,53 +1382,28 @@ growth. That is the next step because the current local trials measure
 request latency but do not show whether the service remains stable under
 sustained operation.
 
-## Capstone
+**How I Used AI**
 
-### How I Used AI
+**Moment 1 — choosing the extension**
 
-I used AI to brainstorm the bounded extension and get a second opinion on my
-criteria, test results, and diagnosis. AI also helped implement the runtime
-`content_id` link and revise the supporting documentation. I made the final
-scope and evaluation decisions, ran the focused tests and live request, and
-checked that the response, runtime log, and audit record matched.
+- **What I asked:** I asked AI to brainstorm bounded capstone options and give
+  me a second opinion on whether local deployment with logs fit this project.
+- **What I got:** It helped compare the hosted and local paths and pointed out
+  that the local GPT-2 model would not fit the free-host memory limit.
+- **What I changed:** I chose the local-with-logs path and kept detector
+  accuracy changes out of scope.
 
----
+**Moment 2 — diagnosing traceability**
 
-## Unit 8 — What's Still Broken
-
-**PI02** is still broken. Its model and style scores (0.2044 and 0.1093)
-combine to 0.1255, below the new 0.18 human cutoff. The failure spans
-**signals one and two**, the **combining rule**, and ultimately the **label
-mapping**; lowering the threshold alone cannot fix those low component
-scores. I stopped at this one surgical change rather than tuning the signals
-against the same small attack set and risking overfitting.
-
-The audit-schema omission on rejected events is fixed for new entries.
-Previously written rejection entries remain in the append-only log with their
-original, shorter shape; I did not rewrite historical records.
-
-No Unit 8 acceptance criterion was missed in its three after trials, but
-meeting Unit 8 Criterion 1 by returning `unsure` for every personal sample is
-not a useful human-writing experience. The evaluation set is small and the
-criteria do not require enough confidently human or AI labels to prove useful
-coverage.
-Unit 8 Criterion 1 is the target I would tighten in a future evaluation: keep
-its original false-positive ceiling, and add a separate minimum for how many
-of my own samples must receive the human label. I am not rewriting the
-original criterion because it was measurable and was met.
-
-**The trade I'd make if this ran for real:**
-
-I would prefer an `unsure` result over a confident AI accusation, so writers
-would not be penalized based on these weak signals. Writers pay for that
-caution through inconclusive results and appeals, while readers and reviewers
-pay because some AI-written text, including PI02, can still receive a human
-label.
-
-## Unit 8 — Milestone 6 submission
-
-The project is on my fork, not the CodePath starter:
-[https://github.com/Johnnyr612/ai201-project4-provenance-guard-starter-v2026](https://github.com/Johnnyr612/ai201-project4-provenance-guard-starter-v2026)
+- **What I asked:** I asked AI to review the Unit 9 results and identify one
+  improvement that followed from the diagnosis.
+- **What I got:** It noticed that a successful request's runtime record did
+  not include the `content_id` needed to find the corresponding audit decision.
+- **What I changed:** I reviewed and kept the improvement to adding that ID to
+  successful `/submit` runtime records. I ran the focused tests and a live
+  request, then checked that the response, runtime record, and audit record
+  shared the ID and that the runtime record omitted submitted text and creator
+  ID values.
 
 
 
