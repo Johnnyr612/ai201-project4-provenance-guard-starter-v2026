@@ -1069,15 +1069,26 @@ rejected with HTTP 400 and `invalid_text`; a subsequent `GET /health` returned
 
 ## What It Costs
 
-There is no API or token charge: the detector runs locally. For the measured
-cost, I used the server-side `duration_ms` field written by `time.perf_counter`
-around each request. Ten sequential submissions of the same controlled
-172-character sample took a total of 9,709.108 ms, for a mean of **970.911 ms
-(0.971 seconds) per submission**, including the cold first request. The first
-request took 9,213.277 ms while loading the model into the process; the other
-nine averaged **55.092 ms** each. The server had not loaded the model when
-`/health` was checked before the run, so the first-request delay is visible in
-the measurement rather than estimated from documentation.
+There is no API or token charge: the detector runs locally. I measured
+server-side `duration_ms`, written using `time.perf_counter` around each
+request. The latest measurement used the same controlled 172-character text
+for ten sequential submissions in each of three fresh processes; the model
+weights were cached, but the model was unloaded at the start of each process.
+The three ten-request means were 497.295, 498.628, and 498.973 ms, for a
+pooled mean of **498.299 ms (0.498 seconds) per submission**, including one
+cold model load in each trial. The three first requests averaged 4.502542 s;
+the remaining 27 warm requests averaged 53.383 ms.
+
+Assuming one submission per person per day, `100 × 0.498299 s = 49.83 s/day`
+of measured request-processing time; a long-lived process is closer to
+`1 × 4.502542 s + 99 × 0.053383 s = 9.79 s/day`, excluding idle time and
+electricity, which I did not measure.
+
+For comparison, the earlier Unit 9 Milestone 3 baseline averaged 970.911 ms
+per submission, including a 9,213.277 ms first request and nine warm requests
+averaging 55.092 ms. The two measurements use the same timing field; the
+different cold-load times show why I include the first request and report the
+method instead of treating a pricing-page estimate as a measurement.
 
 ## Unit 9 Milestone 5 — Run log
 
@@ -1213,17 +1224,17 @@ POST /ping -> HTTP 200 at 0.807 s
 
 ### Diagnosis and chosen improvement
 
-None of the five criteria was missed in the Milestone 5 baseline. The
+None of the five Unit 9 criteria was missed in the Milestone 5 baseline. The
 expected empty-text rejection was returned as HTTP 400 and logged; it was not
-a system failure. I do not think every target was set too low, but Criterion
-1 was too narrow: it counted runtime records and compared response codes
-without requiring a link from a successful `/submit` request to its audit
-decision.
+a system failure. I do not think every target was set too low, but Unit 9
+Criterion 1 was too narrow: it counted runtime records and compared response
+codes without requiring a link from a successful `/submit` request to its
+audit decision.
 The stage was `app.py::log_request`; the mechanism was that its output summary
 kept the status and guess but discarded the generated `content_id`. That left
 someone diagnosing a request unable to identify its audit decision directly.
 
-I would tighten Criterion 1 in a future test to require all eight valid
+I would tighten Unit 9 Criterion 1 in a future test to require all eight valid
 submissions in each trial to have a `content_id` in the runtime event matching
 the corresponding audit decision. I have not changed the original
 Milestone 4 criterion or its target after seeing the results.
@@ -1311,31 +1322,59 @@ about 0.49–0.51 seconds before. All five original criteria remained MET in
 all three trials after the change; the original failure behavior and HTTP
 responses were preserved.
 
+## Unit 9 — What's Still Broken
+
+No Unit 9 criterion was missed. Unit 9 Criterion 1 was too narrow on
+observability: its original target checked that runtime records existed, but
+did not require those records to link to audit decisions. The Milestone 6
+change added and verified that link for all eight valid submissions in each
+trial. The system met the original target; the target I would tighten in a
+future evaluation is all eight valid submissions per trial having matching
+runtime and audit `content_id` values. This is an evaluation gap, not the
+Unit 8 detector limitation described below.
+
+## If I Had One More Unit
+
+First, I would run the instrumented service continuously for a week at the
+planned 100 submissions per day while recording uptime, CPU, memory, and log
+growth. That is the next step because the current local trials measure
+request latency but do not show whether the service remains stable under
+sustained operation.
+
+## Capstone
+
+### How I Used AI
+
+I used AI to brainstorm the bounded extension and get a second opinion on my
+criteria, test results, and diagnosis. AI also helped implement the runtime
+`content_id` link and revise the supporting documentation. I made the final
+scope and evaluation decisions, ran the focused tests and live request, and
+checked that the response, runtime log, and audit record matched.
+
 ---
 
-## What's Still Broken
+## Unit 8 — What's Still Broken
 
 **PI02** is still broken. Its model and style scores (0.2044 and 0.1093)
 combine to 0.1255, below the new 0.18 human cutoff. The failure spans
 **signals one and two**, the **combining rule**, and ultimately the **label
 mapping**; lowering the threshold alone cannot fix those low component
 scores. I stopped at this one surgical change rather than tuning the signals
-against the same small attack set and risking overfitting. A next test should
-add diverse, human-reviewed samples and examine minimum text length and signal
-behavior on short inputs.
+against the same small attack set and risking overfitting.
 
 The audit-schema omission on rejected events is fixed for new entries.
 Previously written rejection entries remain in the append-only log with their
 original, shorter shape; I did not rewrite historical records.
 
-No acceptance criterion was missed in the three after trials, but meeting
-criterion 1 by returning `unsure` for every personal sample is not a useful
-human-writing experience. The evaluation set is small and the criteria do
-not require enough confidently human or AI labels to prove useful coverage.
-Criterion 1 is the target I would tighten in a future evaluation: keep its
-original false-positive ceiling, and add a separate minimum for how many of
-my own samples must receive the human label. I am not rewriting the original
-criterion because it was measurable and was met.
+No Unit 8 acceptance criterion was missed in its three after trials, but
+meeting Unit 8 Criterion 1 by returning `unsure` for every personal sample is
+not a useful human-writing experience. The evaluation set is small and the
+criteria do not require enough confidently human or AI labels to prove useful
+coverage.
+Unit 8 Criterion 1 is the target I would tighten in a future evaluation: keep
+its original false-positive ceiling, and add a separate minimum for how many
+of my own samples must receive the human label. I am not rewriting the
+original criterion because it was measurable and was met.
 
 **The trade I'd make if this ran for real:**
 
@@ -1345,7 +1384,7 @@ caution through inconclusive results and appeals, while readers and reviewers
 pay because some AI-written text, including PI02, can still receive a human
 label.
 
-## Milestone 6 submission
+## Unit 8 — Milestone 6 submission
 
 The project is on my fork, not the CodePath starter:
 [https://github.com/Johnnyr612/ai201-project4-provenance-guard-starter-v2026](https://github.com/Johnnyr612/ai201-project4-provenance-guard-starter-v2026)

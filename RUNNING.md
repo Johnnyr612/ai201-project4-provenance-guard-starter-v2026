@@ -295,20 +295,22 @@ your write-up; that's the deliverable.
 
 ## Where everything lives
 
-| File | What it does |
+| File or folder | What it does now |
 |---|---|
-| `config.py` | Every setting: thresholds, weights, rate limits, the model |
-| `app.py` | The service. `/ping` and `/log` work; `/submit` and `/appeal` are yours |
-| `detector.py` | Signal one — the local model. Given to you |
-| `stylometry.py` | Signal two. **Stubs — you build these** |
-| `scoring.py` | Combining and labelling. **Stubs — you build these** |
-| `audit.py` | The audit log writer. Given to you |
-| `run_attacks.py` | Runs the attack set — **unit 8** |
-| `run_eval.py` | Runs your criteria three times — **unit 8** |
-| `scenarios.py` | What your test runs. **You fill this in** |
-| `criteria.md` | Your five criteria. **You write all five** |
-| `logs/audit.jsonl` | Your audit log. **Commit it** |
-| `results/` | Attack runs and run logs. **Commit them** |
+| `config.py` | Model, thresholds, score weights, rate limits, and log paths |
+| `app.py` | Flask routes, including `/submit`, `/appeal`, `/health`, and per-request runtime logging |
+| `detector.py` | Local model signal used to score submitted text |
+| `stylometry.py` | Implemented style and repeated-phrase signals |
+| `scoring.py` | Combines signal scores and maps them to a label |
+| `audit.py` | Writes audit decisions/rejections and structured runtime events |
+| `run_attacks.py` | Unit 8 attack-set and rate-limit tests |
+| `run_eval.py` | Unit 8 five-criterion evaluator |
+| `scenarios.py` | Inputs used by the Unit 8 evaluator |
+| `test_observability.py` | Focused Unit 9 tests for runtime logging, privacy, and request-to-audit correlation |
+| `criteria.md` | Separate Unit 7 and Unit 9 acceptance criteria |
+| `logs/audit.jsonl` | Append-only audit decisions and rejections; preserve the evidence used in the write-up |
+| `logs/runtime.jsonl` | Append-only HTTP request records; preserve the Unit 9 run evidence used in the write-up |
+| `results/` | Unit 8 attack and evaluation outputs; preserve the run evidence used in the write-up |
 
 ---
 
@@ -360,8 +362,12 @@ in your handler.
 
 At least four new commits in unit 7, four more in unit 8.
 
-`logs/` and `results/` are deliberately **not** in `.gitignore`. Your audit log
-is evidence, and the entries you paste into your README are what unit 8 grades.
+`logs/` and `results/` are deliberately tracked because they contain run
+evidence, not source code or disposable caches. Commit the evidence required
+by the relevant unit and referenced in your write-up. Unit 9 also uses
+`logs/runtime.jsonl` to show what the running service recorded. Ad-hoc checks
+append more rows, so inspect the logs before committing and keep clear which
+entries belong to the measured trials.
 
-**Do not delete and recreate this repository.** You submit the same URL both
-units.
+**Do not delete and recreate this repository.** Keep using the same repository
+for the course units.
