@@ -8,20 +8,38 @@ assumed — the starter ships one that already answers.
 
 ---
 
-## Before your first class
+## Environment and setup
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+The service is tested with Python 3.11–3.13. It uses Flask, PyTorch, and
+Transformers from `requirements.txt`; the local `gpt2` model is about 550 MB
+and is downloaded to the Hugging Face cache on first use. A machine with at
+least 4 GB RAM and about 9 GB free disk space is recommended by `test.py`.
+
+In PowerShell, from the repository root:
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 python test.py
 ```
 
-**You're ready when `python test.py` passes.**
+If PowerShell blocks activation, allow it for the current terminal only, then
+activate the environment:
 
-You'll see `[WARN] Detector model — not downloaded yet`:
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+.\.venv\Scripts\Activate.ps1
+```
 
-```bash
+The measured capstone run used Python 3.13.16, PyTorch 2.15.0+cpu, 15.8 GB
+RAM, and had 574.3 GB free disk space. `python test.py` passed all nine checks.
+The model files were already cached; the first request in a new server process
+still loads the model into memory.
+
+If `python test.py` reports that the model has not been downloaded yet:
+
+```powershell
 python detector.py
 ```
 
@@ -68,12 +86,23 @@ sent it data, it sent something back.
 `/ping` still answers: if it does, the problem is in your handler; if it
 doesn't, it's the service itself, and that's a help-channel question.
 
-## Unit 9 runtime log
+## Unit 9 local run and runtime log
 
-The local run command is still `python app.py`. Each completed HTTP request
-appends one JSON object to `logs/runtime.jsonl`, including requests to `/ping`
-and `/health`. The record has a UTC timestamp, event name, method, route
-template, input summary, output summary, and `duration_ms`.
+With the virtual environment active and the model cached, start the service
+from the repository root with this single command:
+
+```powershell
+python app.py
+```
+
+Leave that terminal running. In a second terminal, activate the same
+environment and send requests to `http://127.0.0.1:5000`. The app binds to
+loopback by default; no hosted service or API key is used.
+
+Each completed HTTP request appends one JSON object to `logs/runtime.jsonl`,
+including requests to `/ping`, `/health`, and rejected `/submit` calls. The
+record has a UTC timestamp, event name, method, route template, input summary,
+output summary, and `duration_ms`.
 
 The input summary records JSON field names and character counts for text-like
 fields, not their contents. It records only whether a creator ID was present,
@@ -89,17 +118,10 @@ Get-Content .\logs\runtime.jsonl -Tail 10
 
 In Bash, use `tail -n 10 logs/runtime.jsonl`.
 
-Then try the route you're going to build:
-
-```bash
-curl -X POST http://127.0.0.1:5000/submit \
-  -H "Content-Type: application/json" \
-  -d '{"text": "some writing", "creator_id": "me"}'
-```
-
-In the untouched starter, this returns a `501` saying the route isn't built
-yet. **That's the correct starting position.** Once you implement Milestones
-3–5, it returns the scores and label instead.
+This Unit 9 run was verified from the existing `capstone` working copy rather
+than a fresh clone. To reproduce it, check out the `capstone` branch, install
+the requirements above, run `python test.py`, and start the service with
+`python app.py`.
 
 ---
 
@@ -313,7 +335,7 @@ sentences, a pasted quotation. That is very cheap to do on purpose.
 
 | What you see | What it means |
 |---|---|
-| `501 not_implemented` | Correct at the start — that's the TODO in `app.py` |
+| `501 not_implemented` | This applied only to the untouched Unit 7 starter; `/submit` is implemented in this capstone branch |
 | `404` from curl | Is the server running? Is the path exactly what you typed? |
 | `Cannot bind parameter 'Headers'` | You're in PowerShell, where `curl` is a different tool. Use `curl.exe`, on one line |
 | Request body arrives empty | curl needs `-H "Content-Type: application/json"` |

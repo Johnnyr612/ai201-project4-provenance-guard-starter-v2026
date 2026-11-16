@@ -1023,16 +1023,58 @@ routes and their responses are unchanged. Run the existing smoke check with
 `python -m unittest -v test_observability.py`. The reproducible local run
 command and log inspection steps are in [RUNNING.md](./RUNNING.md).
 
-**Initial live HTTP smoke check:** With `python app.py` running, I sent a
-`POST /ping` and a `GET /health`. Both returned 200, and the service appended
-these two events to `logs/runtime.jsonl`. This verifies the run path and log
-writer; it is not the later three-trial criteria run, which still needs at
-least ten committed entries.
+## Instrumentation
+
+The local run path is `python app.py`, with requests sent from a second
+PowerShell terminal to `http://127.0.0.1:5000`. This run used the existing
+`capstone` checkout and active `.venv`; it was not run from a clean clone.
+The clean-clone check from the milestone instructions therefore remains
+unverified, as requested.
+
+On the reported machine, `python test.py` passed all 9 checks with Python
+3.13.16, PyTorch 2.15.0+cpu, 15.8 GB RAM, and 574.3 GB free disk space. The
+detector weights were present in the Hugging Face cache, but `/health` showed
+`detector_loaded: false` before the first scored request because the model had
+not yet been loaded into that server process. The first scoring request took
+9.213 seconds; later requests took about 47–71 milliseconds. Transformers
+printed a `loss_type=None` warning and continued with its default loss; all
+ten submissions still returned HTTP 200.
+
+The `/ping` control returned HTTP 200, `/health` returned `ok: true`, and ten
+controlled 172-character `/submit` requests returned HTTP 200 with a `human`
+label. The following are the ten successful records and the invalid-input
+failure record copied from `logs/runtime.jsonl`. They contain input length
+and field names, not the submitted text or creator IDs.
 
 ```json
-{"timestamp":"2026-11-15T05:43:12+00:00","event":"http_request","method":"POST","route":"/ping","input":{"query_fields":[],"json_fields":["message"],"message_characters":14,"creator_id_present":false},"output":{"status_code":200,"content_type":"application/json","json_fields":["ok","service","you_sent"],"ok":true},"duration_ms":0.326}
-{"timestamp":"2026-11-15T05:43:13+00:00","event":"http_request","method":"GET","route":"/health","input":{"query_fields":[]},"output":{"status_code":200,"content_type":"application/json","json_fields":["detector_loaded","detector_model","log_entries","ok","rate_limiting"],"ok":true},"duration_ms":18.828}
+{"timestamp":"2026-11-16T02:38:49+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":9213.277}
+{"timestamp":"2026-11-16T02:38:49+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":54.814}
+{"timestamp":"2026-11-16T02:38:49+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":70.489}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":49.09}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":55.375}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":63.695}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":51.297}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":54.468}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":49.937}
+{"timestamp":"2026-11-16T02:38:50+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":172,"creator_id_present":true},"output":{"status_code":200,"content_type":"application/json","json_fields":["combined_score","confidence","content_id","creator_credential","guess","label","model_score","repetition_score","style_score","verified_human"],"guess":"human"},"duration_ms":46.666}
+{"timestamp":"2026-11-16T02:39:09+00:00","event":"http_request","method":"POST","route":"/submit","input":{"query_fields":[],"json_fields":["creator_id","text"],"text_characters":0,"creator_id_present":true},"output":{"status_code":400,"content_type":"application/json","json_fields":["error","message"],"error":"invalid_text"},"duration_ms":1.361}
 ```
+
+The failed-path entry is an intentionally empty `text` submission. It was
+rejected with HTTP 400 and `invalid_text`; a subsequent `GET /health` returned
+`ok: true` and HTTP 200. The rejection is also present in `logs/audit.jsonl`.
+
+## What It Costs
+
+There is no API or token charge: the detector runs locally. For the measured
+cost, I used the server-side `duration_ms` field written by `time.perf_counter`
+around each request. Ten sequential submissions of the same controlled
+172-character sample took a total of 9,709.108 ms, for a mean of **970.911 ms
+(0.971 seconds) per submission**, including the cold first request. The first
+request took 9,213.277 ms while loading the model into the process; the other
+nine averaged **55.092 ms** each. The server had not loaded the model when
+`/health` was checked before the run, so the first-request delay is visible in
+the measurement rather than estimated from documentation.
 
 ---
 
