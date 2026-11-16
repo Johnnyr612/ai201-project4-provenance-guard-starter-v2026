@@ -156,3 +156,81 @@ down the service.
      A number you missed stays where it is, gets diagnosed, and gets a fix
      attempted. That's where the points are.
      ───────────────────────────────────────────────────────────────────────── -->
+
+---
+
+# Unit 9 — Capstone acceptance criteria
+
+These are the five criteria for the Shape A operational extension: local run
+path, per-request runtime logging, privacy of log contents, failure recording,
+and measured request cost. The Unit 3 run is a baseline for choosing a
+defensible timing target; it is not counted as a trial against these criteria.
+Each criterion will be checked in three separate trials before and after the
+capstone improvement.
+
+## 1. Runtime records cover completed requests
+
+In each of three trials, I will send ten HTTP requests: one `POST /ping`,
+eight valid `POST /submit` requests with unique creator IDs, and one empty-text
+`POST /submit`. The runtime log must gain exactly ten parseable JSONL entries,
+one for each response. Every entry must contain `timestamp`, `method`, `route`,
+`input`, `output.status_code`, and a finite, non-negative `duration_ms`; its
+status code must match the HTTP response.
+
+**Why this target:** A missing or malformed record prevents me from diagnosing
+what happened after a run. Ten requests meets the capstone's minimum log
+evidence without spending extra time and model calls on a larger sample; three
+trials can show whether logging is consistent rather than a one-time success.
+
+## 2. Runtime records do not expose submitted values
+
+In each trial, none of the new runtime entries may contain the literal test
+text, ping message, or any submitted `creator_id` value. Field names and text
+character counts may appear; the original values may not.
+
+**Why this target:** Submitted writing can be private, and creator IDs can
+identify a writer. The service can still be diagnosed from route, field names,
+lengths, status, and timing, so retaining the raw values is unnecessary.
+Zero exposed test values is the privacy boundary; allowing even one raw value
+would expose data without adding diagnostic value.
+
+## 3. Empty-text failures are returned and recorded
+
+In each trial, an empty-text `POST /submit` must return JSON HTTP 400 with
+`error: "invalid_text"`. The corresponding runtime entry must record status
+400 and that error, the audit log must contain the rejection, and a following
+`GET /health` must return HTTP 200.
+
+**Why this target:** A rejected request is still an event worth diagnosing.
+The empty-text case is a known invalid input and the route's contract returns
+400 for it. Requiring both logs and a healthy follow-up distinguishes a clear
+client rejection from a crash or a failure that disappears from the record.
+
+## 4. Ten-request compute time stays within budget
+
+In each of three trials, I will start a fresh service process with the model
+already downloaded, then submit this same controlled text ten times, using a
+unique creator ID for each request: “This is controlled fictional text for
+measuring local processing duration. It contains no personal writing. I am
+recording repeated requests to observe the service runtime.” The arithmetic
+mean of all ten `duration_ms` values, including the first request that loads
+the model into memory, must be no more than 2,000 ms.
+
+**Why this target:** The Unit 3 baseline averaged 970.911 ms, including a
+9,213.277 ms first request and nine warm requests averaging 55.092 ms. A
+2,000 ms mean leaves room for local timing variation while still detecting a
+substantial slowdown; excluding the first request would hide a delay a user
+actually experiences after a service restart.
+
+## 5. The documented local run path preserves the control routes
+
+In each of three trials, starting the service with the documented
+`python app.py` command must allow `GET /health` and `POST /ping` to return
+HTTP 200 within 10 seconds of startup.
+
+**Why this target:** The local run path is the deployment for this project.
+The model loads on the first scoring request rather than at server startup, so
+ten seconds allows for Windows process startup while still catching a missing
+dependency, incorrect command, or service that never binds; waiting a minute
+would hide a startup failure. `/ping` is the existing control route and helps
+distinguish a service-startup problem from a scoring problem.
