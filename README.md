@@ -1026,7 +1026,7 @@ The project is on my fork, not the CodePath starter:
 
 ---
 
-## Capstone
+## Capstone (UNIT 9)
 
 **What This Extends**
 
@@ -1040,8 +1040,8 @@ labels text.
 
 I chose **Shape A: deploy and instrument**, using **Path B: local with logs**.
 The service loads a local GPT-2 model whose memory needs exceed the course's
-512 MB free-host limit. I use controlled test inputs and do not log submitted
-writing or creator ID values.
+512 MB free-host limit. The extension adds observability around the existing
+scoring service; it does not change the detector or its labels.
 
 **Out of scope:** I will not change the detector, scoring weights, or label
 thresholds; add another endpoint or detection capability; or deploy to a
@@ -1064,11 +1064,13 @@ The service now writes one structured event for each completed HTTP request
 to `logs/runtime.jsonl`. Each JSONL record includes a UTC timestamp, event,
 method, route template, input summary, output summary, and elapsed time in
 milliseconds. Input summaries retain field names and character counts rather
-than submitted writing or creator ID values. Output summaries retain the
-status code and selected result fields rather than copying the full response.
+than submitted writing or creator ID values. This privacy description applies
+to `logs/runtime.jsonl`: the separate `logs/audit.jsonl` continues to record
+creator IDs with decisions and rejections. Output summaries retain the status
+code and selected result fields rather than copying the full response.
 Successful `POST /submit` runtime records include the generated `content_id`
-so the request can be matched to its decision in the audit log; incoming text
-and creator IDs are still omitted.
+so the request can be matched to its decision in the audit log; raw text and
+creator ID values are omitted from the runtime record.
 
 The instrumentation wraps the existing Flask request lifecycle; the scoring
 routes and their responses are unchanged. Run the existing smoke check with
